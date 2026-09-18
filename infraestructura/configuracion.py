@@ -55,8 +55,14 @@ class Configuracion:
 
     # Valores por defecto: apuntan a Groq porque es el proveedor gratuito con
     # menor latencia, que en una demostracion en directo se nota.
+    #
+    # El modelo NO puede ser llama-3.3-70b-versatile: Groq lo clasifica en su
+    # nivel Enterprise y una cuenta gratuita recibe un 404 de modelo
+    # inexistente al invocarlo, que es un mensaje enganoso porque el modelo
+    # existe y lo que falta es el permiso. Se usa gpt-oss-120b, que si esta
+    # disponible en el nivel gratuito.
     URL_BASE_POR_DEFECTO = "https://api.groq.com/openai/v1"
-    MODELO_POR_DEFECTO = "llama-3.3-70b-versatile"
+    MODELO_POR_DEFECTO = "openai/gpt-oss-120b"
     LIMITE_EVALUACIONES_POR_DEFECTO = 5
 
     def __init__(self) -> None:

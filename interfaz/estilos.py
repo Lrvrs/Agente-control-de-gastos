@@ -1,0 +1,274 @@
+"""Hoja de estilos de la aplicacion y paleta corporativa."""
+
+import streamlit as st
+
+
+class Paleta:
+    """
+    Colores de la aplicacion, declarados en un unico lugar.
+
+    Tenerlos como constantes con nombre, en vez de repartir codigos hexadecimales
+    por las plantillas, permite ajustar el acabado a la identidad visual de la
+    institucion cambiando solo esta clase.
+    """
+
+    # Azul marino profundo de la barra lateral.
+    MARINO = "#141F52"
+
+    # Azul de acento: enlaces, boton principal y elemento de navegacion activo.
+    AZUL = "#1B45D7"
+
+    # Azul mas claro para fondos suaves y estados de foco.
+    AZUL_SUAVE = "#E8EDFD"
+
+    # Fondo general de la zona de contenido.
+    FONDO = "#F5F7FB"
+
+    # Fondo de las tarjetas y de la tabla.
+    BLANCO = "#FFFFFF"
+
+    # Linea de separacion y bordes de tarjeta.
+    BORDE = "#E4E9F2"
+
+    # Texto principal.
+    TEXTO = "#0F1B3D"
+
+    # Texto secundario y descripciones.
+    TEXTO_SUAVE = "#6B7794"
+
+    # Texto de las etiquetas de seccion en mayusculas.
+    ETIQUETA = "#8A94AD"
+
+    # Colores semanticos de los cuatro veredictos posibles.
+    VERDE = "#0E9F6E"
+    AMBAR = "#C2760B"
+    ROJO = "#D92D20"
+    MORADO = "#7C3AED"
+
+
+class GestorEstilos:
+    """
+    Inyecta la hoja de estilos en la pagina.
+
+    Streamlit no permite enlazar un fichero CSS externo, asi que el unico camino
+    es insertar una etiqueta de estilo en el documento. Se concentra aqui para
+    que ningun otro modulo tenga que insertar CSS suelto.
+    """
+
+    @staticmethod
+    def aplicar() -> None:
+        """Escribe la hoja de estilos completa en la pagina."""
+        # La cadena se construye con formato para poder referenciar la paleta
+        # por nombre y mantener un unico origen de verdad para los colores.
+        hoja = f"""
+        <style>
+        /* ---------- Tipografia y lienzo general ---------- */
+
+        html, body, [class*="css"] {{
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI",
+                         "Inter", "Helvetica Neue", Arial, sans-serif;
+        }}
+
+        /* Fondo de la zona de contenido, ligeramente azulado como la
+           referencia visual, para que las tarjetas blancas destaquen. */
+        .stApp {{
+            background-color: {Paleta.FONDO};
+        }}
+
+        /* Se reduce el espacio superior que Streamlit reserva por defecto:
+           la pantalla debe empezar en el banner, no con un hueco vacio. */
+        .block-container {{
+            padding-top: 2rem;
+            padding-bottom: 4rem;
+            max-width: 1180px;
+        }}
+
+        /* Oculta el menu y el pie de Streamlit, que no aportan nada al alumno
+           y delatan la herramienta con la que esta construida la pagina. */
+        #MainMenu, footer, header {{ visibility: hidden; }}
+
+        /* ---------- Barra lateral ---------- */
+
+        section[data-testid="stSidebar"] {{
+            background-color: {Paleta.MARINO};
+        }}
+
+        /* Todo el texto de la barra lateral va en claro sobre el azul marino. */
+        section[data-testid="stSidebar"] * {{
+            color: #FFFFFF;
+        }}
+
+        /* Bloque de identidad en la cabecera de la barra lateral. */
+        .marca {{
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 4px 0 22px 0;
+            border-bottom: 1px solid rgba(255,255,255,0.12);
+            margin-bottom: 18px;
+        }}
+
+        /* Cuadro con las iniciales, usado cuando no hay logotipo disponible. */
+        .marca-sigla {{
+            width: 40px; height: 40px;
+            border-radius: 10px;
+            background: {Paleta.AZUL};
+            display: flex; align-items: center; justify-content: center;
+            font-weight: 700; font-size: 15px; letter-spacing: 0.02em;
+        }}
+
+        .marca-nombre {{ font-weight: 700; font-size: 15px; line-height: 1.2; }}
+
+        .marca-sub {{
+            font-size: 10px; letter-spacing: 0.14em; text-transform: uppercase;
+            color: rgba(255,255,255,0.55); margin-top: 3px;
+        }}
+
+        /* Elemento de navegacion. El estado activo se resuelve con una clase
+           adicional en lugar de con JavaScript, que Streamlit no permite. */
+        .nav-item {{
+            padding: 11px 14px; border-radius: 10px; margin-bottom: 4px;
+        }}
+
+        .nav-item-activo {{ background: {Paleta.AZUL}; }}
+
+        .nav-titulo {{ font-size: 14px; font-weight: 600; }}
+
+        .nav-desc {{
+            font-size: 11.5px; color: rgba(255,255,255,0.55); margin-top: 2px;
+        }}
+
+        /* Pie de la barra lateral, con el dato tecnico del modelo en uso. */
+        .lateral-pie {{
+            position: relative; margin-top: 28px; padding-top: 14px;
+            border-top: 1px solid rgba(255,255,255,0.12);
+            font-size: 11px; color: rgba(255,255,255,0.45);
+            font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+        }}
+
+        /* ---------- Banner superior reservado ---------- */
+
+        /* Espacio reservado para el banner que se disenara mas adelante.
+           Se deja como marcador visible para que no se olvide, y se sustituye
+           por una imagen cambiando unicamente el componente que lo pinta. */
+        .banner-hueco {{
+            height: 104px; border-radius: 14px; margin-bottom: 26px;
+            border: 1.5px dashed {Paleta.BORDE};
+            background: repeating-linear-gradient(
+                -45deg, {Paleta.BLANCO}, {Paleta.BLANCO} 12px,
+                #FAFBFE 12px, #FAFBFE 24px);
+            display: flex; align-items: center; justify-content: center;
+            color: {Paleta.ETIQUETA}; font-size: 11px;
+            letter-spacing: 0.16em; text-transform: uppercase; font-weight: 600;
+        }}
+
+        /* ---------- Cabecera de la pagina ---------- */
+
+        .etiqueta-seccion {{
+            font-size: 11px; font-weight: 700; letter-spacing: 0.16em;
+            text-transform: uppercase; color: {Paleta.ETIQUETA};
+            margin-bottom: 10px;
+        }}
+
+        .titulo-pagina {{
+            font-size: 40px; font-weight: 800; color: {Paleta.AZUL};
+            letter-spacing: -0.02em; margin: 0 0 14px 0; line-height: 1.1;
+        }}
+
+        .entradilla {{
+            font-size: 15px; color: {Paleta.TEXTO}; line-height: 1.65;
+            max-width: 860px; margin-bottom: 30px;
+        }}
+
+        .entradilla strong {{ color: {Paleta.TEXTO}; font-weight: 700; }}
+
+        /* ---------- Tarjetas ---------- */
+
+        /* Tarjeta con filete de color a la izquierda, como en la referencia.
+           El color del filete lo fija cada uso mediante un estilo en linea. */
+        .tarjeta {{
+            background: {Paleta.BLANCO}; border: 1px solid {Paleta.BORDE};
+            border-radius: 12px; padding: 18px 20px; margin-bottom: 14px;
+        }}
+
+        .tarjeta-titulo {{
+            font-size: 10.5px; font-weight: 700; letter-spacing: 0.14em;
+            text-transform: uppercase; margin-bottom: 8px;
+        }}
+
+        .tarjeta-dato {{
+            font-size: 19px; font-weight: 700; color: {Paleta.TEXTO};
+            line-height: 1.25;
+        }}
+
+        .tarjeta-nota {{
+            font-size: 12.5px; color: {Paleta.TEXTO_SUAVE};
+            margin-top: 6px; line-height: 1.55;
+        }}
+
+        /* ---------- Tabla de veredictos ---------- */
+
+        .tabla {{
+            width: 100%; border-collapse: separate; border-spacing: 0;
+            background: {Paleta.BLANCO}; border: 1px solid {Paleta.BORDE};
+            border-radius: 12px; overflow: hidden; font-size: 13px;
+        }}
+
+        .tabla th {{
+            text-align: left; padding: 12px 14px;
+            font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase;
+            color: {Paleta.ETIQUETA}; font-weight: 700;
+            border-bottom: 1px solid {Paleta.BORDE}; background: #FBFCFE;
+        }}
+
+        .tabla td {{
+            padding: 13px 14px; border-bottom: 1px solid #F0F3F8;
+            color: {Paleta.TEXTO}; vertical-align: top;
+        }}
+
+        .tabla tr:last-child td {{ border-bottom: none; }}
+
+        /* Fila resaltada: marca los gastos cuyo veredicto ha cambiado respecto
+           a la ejecucion anterior. Es el elemento central del ejercicio. */
+        .fila-cambiada {{ background: {Paleta.AZUL_SUAVE}; }}
+
+        /* Los identificadores e importes van en monoespaciada para que las
+           cifras queden alineadas y se comparen de un vistazo. */
+        .mono {{
+            font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+            font-size: 12px;
+        }}
+
+        /* Distintivo de veredicto. El color concreto lo aporta cada fila. */
+        .distintivo {{
+            display: inline-block; padding: 3px 9px; border-radius: 6px;
+            font-size: 10.5px; font-weight: 700; letter-spacing: 0.06em;
+            white-space: nowrap;
+        }}
+
+        /* Marca discreta que senala una fila modificada. */
+        .marca-cambio {{
+            display: inline-block; margin-left: 7px; font-size: 10px;
+            font-weight: 700; color: {Paleta.AZUL}; letter-spacing: 0.06em;
+        }}
+
+        /* ---------- Controles ---------- */
+
+        /* Boton principal, en el azul de acento y con el texto en negrita. */
+        .stButton > button[kind="primary"] {{
+            background: {Paleta.AZUL}; border: none; border-radius: 9px;
+            font-weight: 700; padding: 10px 22px; font-size: 14px;
+        }}
+
+        .stButton > button[kind="primary"]:hover {{ background: #1639B8; }}
+
+        /* Area de texto de la politica: monoespaciada, porque se edita como un
+           documento normativo y la alineacion ayuda a leer las clausulas. */
+        .stTextArea textarea {{
+            font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+            font-size: 12.5px; line-height: 1.6;
+            border-radius: 10px; border: 1px solid {Paleta.BORDE};
+        }}
+        </style>
+        """
+        st.markdown(hoja, unsafe_allow_html=True)

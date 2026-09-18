@@ -67,12 +67,22 @@ class ProveedorCompatibleOpenAI(ProveedorLLM):
 
         # El cliente se crea una sola vez y se reutiliza: abrir una conexion
         # nueva por peticion multiplicaria la latencia percibida.
-        self._cliente = OpenAI(
-            api_key=configuracion.clave_api,
-            base_url=configuracion.url_base,
-            timeout=self.TIEMPO_MAXIMO_ESPERA,
-            max_retries=0,  # Los reintentos se gestionan en la capa superior.
-        )
+        #
+        # La construccion se protege porque puede fallar por motivos ajenos a
+        # las credenciales, tipicamente una incompatibilidad entre la version
+        # del SDK y la de su cliente HTTP subyacente. Sin esta proteccion, ese
+        # fallo sale a pantalla como una traza de Python delante de la clase.
+        try:
+            self._cliente = OpenAI(
+                api_key=configuracion.clave_api,
+                base_url=configuracion.url_base,
+                timeout=self.TIEMPO_MAXIMO_ESPERA,
+                max_retries=0,  # Los reintentos se gestionan en la capa superior.
+            )
+        except Exception as error:
+            raise ErrorProveedorLLM(
+                f"No se pudo inicializar el cliente del modelo: {error}"
+            ) from error
 
     @property
     def nombre_modelo(self) -> str:
@@ -160,4 +170,14 @@ class FabricaProveedores:
             raise ErrorProveedorLLM(
                 "No hay ninguna clave de API configurada para el modelo."
             )
-        return ProveedorCompatibleOpenAI(configuracion)
+
+        # Cualquier fallo de construccion se traduce a un error de dominio para
+        # que la interfaz tenga garantizado que solo debe capturar un tipo.
+        try:
+            return ProveedorCompatibleOpenAI(configuracion)
+        except ErrorProveedorLLM:
+            raise
+        except Exception as error:
+            raise ErrorProveedorLLM(
+                f"No se pudo crear el proveedor del modelo: {error}"
+            ) from error

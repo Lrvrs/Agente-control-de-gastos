@@ -1,6 +1,7 @@
 """Lectura centralizada de la configuracion y de los secretos."""
 
 from dataclasses import dataclass
+from pathlib import Path
 import os
 
 import streamlit as st
@@ -60,6 +61,10 @@ class Configuracion:
 
     def __init__(self) -> None:
         """Carga la configuracion una sola vez al construir el objeto."""
+        # Se resuelve una unica vez si hay fichero de secretos, para no repetir
+        # la comprobacion en cada uno de los valores que se leen despues.
+        self._secretos_disponibles = self._existe_fichero_de_secretos()
+
         self._llm = self._cargar_llm()
         self._aula = self._cargar_aula()
 
@@ -73,21 +78,47 @@ class Configuracion:
         """Configuracion de uso en el aula."""
         return self._aula
 
+    @staticmethod
+    def _existe_fichero_de_secretos() -> bool:
+        """
+        Comprueba si hay algun fichero de secretos antes de acceder a st.secrets.
+
+        Esta comprobacion previa es imprescindible y no es una precaucion
+        teorica: cuando no existe fichero de secretos, Streamlit no se limita a
+        lanzar una excepcion, sino que ademas escribe un mensaje de error en
+        ingles directamente en la pagina. Ese mensaje es invisible para un
+        bloque try y acabaria mostrandose al alumno tantas veces como valores
+        se intenten leer. Mirando primero el sistema de ficheros se evita del
+        todo entrar en ese camino.
+
+        Se consultan las dos rutas que utiliza Streamlit: la del proyecto y la
+        del directorio personal del usuario, que es la que emplea Streamlit
+        Community Cloud para depositar lo que se escribe en su panel.
+        """
+        rutas_posibles = (
+            Path(".streamlit") / "secrets.toml",
+            Path.home() / ".streamlit" / "secrets.toml",
+        )
+        return any(ruta.exists() for ruta in rutas_posibles)
+
     def _leer(self, seccion: str, clave: str, por_defecto: str = "") -> str:
         """
         Busca un valor en los secretos de Streamlit y, si no esta, en el entorno.
 
-        El acceso a `st.secrets` se envuelve en un try porque lanza excepcion
-        cuando no existe ningun fichero de secretos, situacion perfectamente
-        normal al ejecutar sin credenciales para ver la interfaz.
+        El orden importa: en el despliegue en la nube el valor bueno esta en los
+        secretos, mientras que las variables de entorno son la alternativa para
+        cualquier otro entorno de ejecucion.
         """
-        # Primera fuente: los secretos de Streamlit, que es lo que se usa en la nube.
-        try:
-            if seccion in st.secrets and clave in st.secrets[seccion]:
-                return str(st.secrets[seccion][clave])
-        except Exception:
-            # Cualquier fallo al leer secretos se trata como ausencia de valor.
-            pass
+        # Primera fuente: los secretos de Streamlit, solo si realmente existen.
+        if self._secretos_disponibles:
+            try:
+                if seccion in st.secrets and clave in st.secrets[seccion]:
+                    return str(st.secrets[seccion][clave])
+            except Exception:
+                # Un fichero presente pero mal formado se trata como ausencia de
+                # valor: es preferible arrancar con los valores por defecto que
+                # dejar la aplicacion inservible por una coma mal puesta.
+                pass
 
         # Segunda fuente: variable de entorno con el nombre SECCION_CLAVE.
         nombre_variable = f"{seccion.upper()}_{clave.upper()}"

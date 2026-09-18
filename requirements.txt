@@ -1,6 +1,14 @@
 # Versiones fijadas a proposito.
-# Una actualizacion inesperada de Streamlit el dia de la clase es un riesgo real
-# y evitable: se fija la version para que el despliegue sea reproducible.
+# Una actualizacion inesperada de cualquiera de estas bibliotecas el dia de la
+# clase es un riesgo real y evitable, asi que el despliegue es reproducible.
 streamlit==1.39.0
 pandas==2.2.3
-openai==1.54.3
+
+# openai 1.54.x pasaba el argumento `proxies` al construir su cliente HTTP.
+# httpx elimino ese argumento en la version 0.28, de modo que la combinacion
+# openai 1.54 con httpx 0.28 falla con un TypeError en cuanto se instancia el
+# cliente. Se fija una version de openai posterior a esa correccion y se ancla
+# httpx de forma explicita para que una resolucion futura no vuelva a emparejar
+# dos versiones incompatibles.
+openai==1.109.1
+httpx==0.28.1

@@ -181,7 +181,7 @@ class Componentes:
         # Cabecera de la tabla, con los nombres de columna en versalitas.
         encabezado = (
             "<tr><th>Id</th><th>Gasto</th><th>Importe</th>"
-            "<th>Veredicto</th><th>Clausula</th><th>Motivo</th></tr>"
+            "<th>Veredicto</th><th>Cláusula</th><th>Motivo</th></tr>"
         )
 
         st.markdown(

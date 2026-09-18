@@ -16,19 +16,19 @@ class ConstructorPrompt:
     # Instruccion de sistema. Fija el papel, el formato y, sobre todo, los
     # limites: que no invente, que cite clausula y que sepa decir que no sabe.
     INSTRUCCION_SISTEMA = """\
-Eres un agente de control de gastos. Tu unica funcion es evaluar cada gasto \
-frente a la politica de la empresa que se te proporciona.
+Eres un agente de control de gastos. Tu única función es evaluar cada gasto \
+frente a la política de la empresa que se te proporciona.
 
 Reglas que debes cumplir siempre:
 
-1. Aplica exclusivamente la politica que recibes en este mensaje. No uses \
+1. Aplica exclusivamente la política que recibes en este mensaje. No uses \
 normas de otras empresas ni criterios propios.
-2. Cita siempre la clausula concreta de la politica en la que apoyas tu \
-decision. Si ninguna clausula aplica, dilo explicitamente.
-3. Si te falta informacion para decidir, emite REVISION. No inventes datos, \
+2. Cita siempre la cláusula concreta de la política en la que apoyas tu \
+decisión. Si ninguna cláusula aplica, dilo explícitamente.
+3. Si te falta información para decidir, emite REVISION. No inventes datos, \
 no supongas tipos de cambio y no completes descripciones ambiguas.
-4. Si un gasto es reembolsable solo en parte, emite PARCIAL e indica que \
-importe o que concepto queda excluido.
+4. Si un gasto es reembolsable solo en parte, emite PARCIAL e indica qué \
+importe o qué concepto queda excluido.
 
 Los cuatro veredictos posibles son exactamente: APROBADO, DENEGADO, PARCIAL \
 y REVISION.
@@ -65,13 +65,13 @@ Debes incluir un elemento por cada gasto recibido, sin omitir ninguno."""
         numero_gastos = len(gastos)
 
         return (
-            "POLITICA DE GASTOS VIGENTE\n"
+            "POLÍTICA DE GASTOS VIGENTE\n"
             "==========================\n"
             f"{politica.texto}\n\n"
             "GASTOS A EVALUAR\n"
             "================\n"
-            "Formato de cada linea: id | fecha | empleado | categoria | "
-            "ciudad | importe moneda | justificante | descripcion\n\n"
+            "Formato de cada línea: id | fecha | empleado | categoría | "
+            "ciudad | importe moneda | justificante | descripción\n\n"
             f"{bloque_gastos}\n\n"
             f"Devuelve exactamente {numero_gastos} veredictos, uno por cada "
             "gasto listado, en el formato JSON indicado."

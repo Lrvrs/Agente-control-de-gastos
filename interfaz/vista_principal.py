@@ -121,7 +121,7 @@ class VistaPrincipal:
             '<div class="titulo-pagina">Agente de gastos</div>',
             unsafe_allow_html=True,
         )
-        introducida = st.text_input("Contrasena de clase", type="password")
+        introducida = st.text_input("Contraseña de clase", type="password")
 
         # Comparacion directa: el valor no protege ningun dato sensible, solo
         # evita que la URL publica sea consumida por quien no esta en el aula.
@@ -132,7 +132,7 @@ class VistaPrincipal:
         # Mensaje solo si se ha escrito algo y no coincide, para no mostrar un
         # error al alumno antes de que haya tenido ocasion de teclear.
         if introducida:
-            st.error("La contrasena no es correcta.")
+            st.error("La contraseña no es correcta.")
 
         return False
 
@@ -148,10 +148,10 @@ class VistaPrincipal:
         # pantalla. Se deja preparada la estructura para cuando se anadan las
         # rondas del juego de aprobar y denegar.
         Componentes.elemento_navegacion(
-            "Politica", "editar reglas y evaluar", activo=True
+            "Política", "editar reglas y evaluar", activo=True
         )
         Componentes.elemento_navegacion(
-            "Partida", "aprobar o denegar (proximamente)", activo=False
+            "Partida", "aprobar o denegar (próximamente)", activo=False
         )
 
         # Dato tecnico de trazabilidad: que modelo esta respondiendo y cuanto
@@ -171,12 +171,12 @@ class VistaPrincipal:
         """Pinta la etiqueta, el titulo y el parrafo explicativo."""
         Componentes.cabecera(
             etiqueta="Panel",
-            titulo="La politica manda",
+            titulo="La política manda",
             entradilla_html=(
-                "Abajo tienes los gastos de un mes y la <strong>politica de "
-                "viajes</strong> de la empresa. El agente evalua cada gasto "
-                "aplicando <strong>solo</strong> esa politica. "
-                "Cambia una regla, vuelve a evaluar y observa que decisiones "
+                "Abajo tienes los gastos de un mes y la <strong>política de "
+                "viajes</strong> de la empresa. El agente evalúa cada gasto "
+                "aplicando <strong>solo</strong> esa política. "
+                "Cambia una regla, vuelve a evaluar y observa qué decisiones "
                 "se mueven: el comportamiento del sistema lo decide el texto "
                 "que escribes, no el modelo."
             ),
@@ -200,8 +200,8 @@ class VistaPrincipal:
             # texto, no la del fichero, de ahi que se lea del estado.
             politica_actual = self._politica_en_curso()
             Componentes.tarjeta(
-                titulo="Politica",
-                dato=f"{politica_actual.numero_de_lineas} lineas",
+                titulo="Política",
+                dato=f"{politica_actual.numero_de_lineas} líneas",
                 nota=self._describir_estado_politica(politica_actual),
                 color=Paleta.MORADO,
             )
@@ -210,7 +210,7 @@ class VistaPrincipal:
             Componentes.tarjeta(
                 titulo="Cupo",
                 dato=f"{self._control_uso.restantes} evaluaciones",
-                nota="Los resultados servidos desde cache no consumen cupo.",
+                nota="Los resultados servidos desde caché no consumen cupo.",
                 color=Paleta.VERDE,
             )
 
@@ -218,14 +218,14 @@ class VistaPrincipal:
         """Pinta el cuadro de texto de la politica y el boton de evaluar."""
         st.markdown(
             '<div class="etiqueta-seccion" style="margin-top:14px">'
-            'Politica de viajes · editable</div>',
+            'Política de viajes · editable</div>',
             unsafe_allow_html=True,
         )
 
         # El cuadro de texto escribe directamente en el estado de sesion a
         # traves de su clave, de modo que el valor persiste entre reejecutados.
         st.text_area(
-            label="Politica",
+            label="Política",
             key=self.CLAVE_TEXTO_POLITICA,
             height=260,
             label_visibility="collapsed",
@@ -245,7 +245,7 @@ class VistaPrincipal:
 
         with columna_aviso:
             if not self._control_uso.puede_evaluar:
-                st.warning("Has agotado tu cupo de evaluaciones en esta sesion.")
+                st.warning("Has agotado tu cupo de evaluaciones en esta sesión.")
 
         if pulsado:
             self._ejecutar_evaluacion(gastos)
@@ -261,7 +261,7 @@ class VistaPrincipal:
         if resultado is None:
             st.info(
                 "Pulsa **Evaluar gastos** para que el agente aplique la "
-                "politica. Despues cambia una regla y vuelve a evaluar."
+                "política. Después cambia una regla y vuelve a evaluar."
             )
             return
 
@@ -307,13 +307,13 @@ class VistaPrincipal:
         # muestra de forma destacada y solo cuando hay algo que contar.
         if cambiados:
             st.success(
-                f"Tu cambio en la politica ha movido "
+                f"Tu cambio en la política ha movido "
                 f"**{len(cambiados)}** veredicto(s): "
                 f"{', '.join(cambiados)}. Aparecen resaltados en la tabla."
             )
 
         # Trazabilidad discreta del origen del resultado.
-        origen = "cache" if resultado.procede_de_cache else "modelo"
+        origen = "caché" if resultado.procede_de_cache else "modelo"
         st.caption(
             f"Resultado obtenido de {origen} · "
             f"modelo {resultado.modelo_utilizado or 'no indicado'}"
@@ -329,7 +329,7 @@ class VistaPrincipal:
             politica = self._politica_en_curso()
         except ValueError:
             # La politica vacia se rechaza aqui, antes de gastar una llamada.
-            st.error("La politica no puede quedar vacia.")
+            st.error("La política no puede quedar vacía.")
             return
 
         try:
@@ -346,7 +346,7 @@ class VistaPrincipal:
 
         # El indicador de progreso importa: sin el, tres segundos de espera se
         # perciben como una aplicacion que no responde.
-        with st.spinner("El agente esta aplicando tu politica..."):
+        with st.spinner("El agente está aplicando tu política..."):
             try:
                 resultado = servicio.evaluar(politica, gastos)
             except ErrorProveedorLLM as error:

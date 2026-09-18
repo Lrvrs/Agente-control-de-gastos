@@ -119,7 +119,7 @@ class ProveedorCompatibleOpenAI(ProveedorLLM):
         # Una respuesta sin contenido es anomala pero posible; se trata como
         # error controlado en lugar de dejar que falle al indexar.
         if not respuesta.choices:
-            raise ErrorProveedorLLM("El proveedor devolvio una respuesta vacia.")
+            raise ErrorProveedorLLM("El proveedor devolvió una respuesta vacía.")
 
         contenido = respuesta.choices[0].message.content
         return contenido or ""
@@ -137,7 +137,7 @@ class ProveedorCompatibleOpenAI(ProveedorLLM):
         # El codigo 429 y las menciones a cuota indican limite de ritmo.
         if "429" in texto or "rate limit" in texto or "quota" in texto:
             return ErrorProveedorLLM(
-                "El servicio esta recibiendo muchas peticiones a la vez.",
+                "El servicio está recibiendo muchas peticiones a la vez.",
                 es_limite_de_ritmo=True,
             )
 
@@ -145,7 +145,7 @@ class ProveedorCompatibleOpenAI(ProveedorLLM):
         # que quien despliega sepa que revisar el panel de secretos.
         if "401" in texto or "unauthorized" in texto or "api key" in texto:
             return ErrorProveedorLLM(
-                "La clave de API no es valida o no esta configurada."
+                "La clave de API no es válida o no está configurada."
             )
 
         # Cualquier otro caso se reporta de forma generica pero identificable.

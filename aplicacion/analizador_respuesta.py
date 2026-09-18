@@ -116,7 +116,7 @@ class AnalizadorRespuesta:
             identificador_gasto=identificador,
             tipo=tipo,
             clausula=clausula,
-            motivo=motivo or "El modelo no aporto motivo.",
+            motivo=motivo or "El modelo no aportó motivo.",
         )
 
     def _completar_ausentes(
@@ -136,6 +136,6 @@ class AnalizadorRespuesta:
                         identificador_gasto=gasto.identificador,
                         tipo=TipoVeredicto.REVISION,
                         clausula="sin indicar",
-                        motivo="El modelo no devolvio veredicto para este gasto.",
+                        motivo="El modelo no devolvió veredicto para este gasto.",
                     )
                 )

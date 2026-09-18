@@ -23,7 +23,7 @@ class Politica:
         # Una politica vacia haria que el modelo se inventase las reglas enteras,
         # que es un fallo silencioso y dificil de detectar en clase.
         if not self.texto or not self.texto.strip():
-            raise ValueError("La politica no puede estar vacia.")
+            raise ValueError("La política no puede estar vacía.")
 
     @property
     def huella(self) -> str:

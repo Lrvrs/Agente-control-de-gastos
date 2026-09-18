@@ -293,6 +293,50 @@ class GestorEstilos:
             white-space: pre-wrap;
         }}
 
+        /* Acuse de envio. Sustituye al aviso de simulacion una vez el
+           alumno ha pulsado Enviar: el mensaje ya no es un borrador, es un
+           hecho consumado dentro de la simulacion. */
+        .correo-enviado {{
+            background: #E7F6EF; border: 1px solid #A7DCC4;
+            color: #076B47; border-radius: 8px; padding: 9px 12px;
+            font-size: 11.5px; font-weight: 600; margin-bottom: 14px;
+        }}
+
+        /* ---------- Filas interactivas de veredicto ---------- */
+
+        /* Cabecera de la lista de gastos. Replica el aspecto de la cabecera
+           de tabla anterior, pero sobre una rejilla de columnas de Streamlit,
+           que es lo que permite intercalar botones en cada fila. */
+        .fila-cabecera {{
+            font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase;
+            color: {Paleta.ETIQUETA}; font-weight: 700; padding-bottom: 2px;
+        }}
+
+        /* Celda de concepto: descripcion en primera linea y metadatos debajo. */
+        .celda-concepto {{ font-size: 13px; line-height: 1.45; }}
+
+        .celda-meta {{
+            font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+            font-size: 11px; color: {Paleta.TEXTO_SUAVE};
+        }}
+
+        /* Marca de discrepancia entre el alumno y el agente. Es el dato mas
+           valioso del ejercicio, asi que se destaca en rojo y en versalitas. */
+        .discrepa {{
+            display: inline-block; margin-left: 6px; font-size: 9.5px;
+            font-weight: 800; letter-spacing: 0.08em; color: {Paleta.ROJO};
+        }}
+
+        /* Celda aun sin decidir por el alumno. */
+        .sin-decidir {{
+            font-size: 11.5px; color: {Paleta.ETIQUETA}; font-style: italic;
+        }}
+
+        /* Separador entre filas, para que la lista se lea como una tabla. */
+        .separador-fila {{
+            height: 1px; background: #EDF1F7; margin: 2px 0 6px 0;
+        }}
+
         /* ---------- Controles ---------- */
 
         /* Boton principal, en el azul de acento y con el texto en negrita. */

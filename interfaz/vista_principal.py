@@ -33,6 +33,8 @@ class VistaPrincipal:
     CLAVE_GASTOS_SUBIDOS = "gastos_subidos"
     CLAVE_NOMBRE_FICHERO = "nombre_fichero_subido"
     CLAVE_CORREO_ABIERTO = "correo_abierto"
+    CLAVE_CORREOS_ENVIADOS = "correos_enviados"
+    CLAVE_DECISIONES = "decisiones_alumno"
 
     def __init__(self) -> None:
         """Construye las dependencias de la vista una sola vez por ejecucion."""
@@ -113,6 +115,18 @@ class VistaPrincipal:
 
         # Identificador del gasto cuyo correo se esta mostrando, o None.
         st.session_state.setdefault(self.CLAVE_CORREO_ABIERTO, None)
+
+        # Registro de los correos ya autorizados en esta sesion. Se guarda
+        # como lista y no como conjunto para conservar el orden: el orden
+        # en que el alumno fue autorizando es informacion util al comentar
+        # despues que decisiones tomo y en que secuencia.
+        st.session_state.setdefault(self.CLAVE_CORREOS_ENVIADOS, [])
+
+        # Decisiones del alumno, indexadas por identificador de gasto.
+        # Se guardan aparte de los veredictos del agente precisamente para
+        # poder compararlas: el valor del ejercicio esta en la diferencia
+        # entre lo que propuso el sistema y lo que decidio la persona.
+        st.session_state.setdefault(self.CLAVE_DECISIONES, {})
 
     def _verificar_acceso(self) -> bool:
         """
@@ -292,9 +306,7 @@ class VistaPrincipal:
             'Veredictos</div>',
             unsafe_allow_html=True,
         )
-        Componentes.tabla_veredictos(gastos, resultado, cambiados)
-
-        self._renderizar_botonera_correos(gastos, resultado)
+        self._renderizar_lista_interactiva(gastos, resultado, cambiados)
 
     def _renderizar_recuento(
         self, resultado: ResultadoEvaluacion, cambiados: list
@@ -465,44 +477,172 @@ class VistaPrincipal:
             return subidos
         return self._repositorio.cargar_gastos()
 
-    def _renderizar_botonera_correos(self, gastos, resultado) -> None:
-        """Pinta un boton por gasto para abrir el correo que generaria."""
-        st.markdown(
-            '<div class="etiqueta-seccion" style="margin-top:22px">'
-            'Correos que enviaría el agente</div>',
-            unsafe_allow_html=True,
-        )
+    # Proporciones de las columnas de cada fila. Se declaran una sola vez
+    # para que la cabecera y las filas de datos queden siempre alineadas.
+    PROPORCIONES_FILA = [0.7, 3.3, 1.1, 1.4, 1.5, 0.55, 0.55, 0.55]
+
+    def _renderizar_lista_interactiva(self, gastos, resultado, cambiados) -> None:
+        """
+        Pinta la lista de gastos con los controles de revision de cada uno.
+
+        Sustituye a la tabla estatica anterior. El motivo es funcional: no hay
+        forma de intercalar botones dentro de una tabla HTML en Streamlit, y el
+        ejercicio necesita que el alumno pueda pronunciarse sobre cada gasto sin
+        salir de la fila que esta leyendo. Se construye por tanto sobre una
+        rejilla de columnas, conservando el aspecto anterior mediante estilos.
+        """
         st.caption(
-            "Pulsa una referencia para ver el mensaje. Nada se envía: es una "
-            "simulación de la acción que ejecutaría el agente."
+            "El agente ya ha decidido. Tu trabajo es revisarlo: confirma con "
+            "**✓** o corrige con **✗**. Con **✉** ves el correo que se enviaría."
         )
 
-        # Rejilla de seis columnas. Con doce gastos salen dos filas limpias, y
-        # con menos se reparten sin dejar huecos raros.
-        lista = list(gastos)
-        columnas_por_fila = 6
+        cambiados_conjunto = set(cambiados)
+        decisiones = st.session_state[self.CLAVE_DECISIONES]
+        enviados = st.session_state[self.CLAVE_CORREOS_ENVIADOS]
 
-        for inicio in range(0, len(lista), columnas_por_fila):
-            bloque = lista[inicio : inicio + columnas_por_fila]
-            columnas = st.columns(columnas_por_fila)
+        Componentes.cabecera_lista(st.columns(self.PROPORCIONES_FILA))
+        Componentes.separador()
 
-            for columna, gasto in zip(columnas, bloque):
-                with columna:
-                    # La clave debe ser unica y estable para que Streamlit no
-                    # confunda dos botones al reordenarse la pantalla.
-                    if st.button(
-                        gasto.identificador,
-                        key=f"correo_{gasto.identificador}",
-                        use_container_width=True,
-                    ):
-                        st.session_state[self.CLAVE_CORREO_ABIERTO] = (
-                            gasto.identificador
-                        )
+        for gasto in gastos:
+            veredicto = resultado.obtener(gasto.identificador)
+
+            # No deberia ocurrir, porque el analizador rellena los ausentes,
+            # pero una fila sin veredicto se omite antes que romper la pantalla.
+            if veredicto is None:
+                continue
+
+            self._renderizar_fila(
+                gasto, veredicto,
+                resaltado=gasto.identificador in cambiados_conjunto,
+                decision=decisiones.get(gasto.identificador, ""),
+                enviado=gasto.identificador in enviados,
+            )
+
+        self._renderizar_balance(gastos, resultado)
 
         # Si hay un correo seleccionado, se abre la ventana emergente.
         identificador = st.session_state[self.CLAVE_CORREO_ABIERTO]
         if identificador:
             self._mostrar_correo(identificador, gastos, resultado)
+
+    def _renderizar_fila(self, gasto, veredicto, resaltado, decision, enviado) -> None:
+        """Pinta una fila completa: datos, veredicto, decision y controles."""
+        columnas = st.columns(self.PROPORCIONES_FILA)
+
+        with columnas[0]:
+            Componentes.celda_identificador(gasto.identificador, resaltado)
+        with columnas[1]:
+            Componentes.celda_concepto(gasto)
+        with columnas[2]:
+            Componentes.celda_importe(gasto)
+        with columnas[3]:
+            Componentes.celda_veredicto(veredicto)
+        with columnas[4]:
+            # Se considera discrepancia cuando el alumno dice algo distinto de
+            # lo que dijo el agente. Los veredictos que el agente no resuelve
+            # -PARCIAL y REVISION- no cuentan como discrepancia: ahi no propuso
+            # nada que contradecir, sino que pidio precisamente una decision.
+            discrepa = self._hay_discrepancia(veredicto, decision)
+            Componentes.celda_decision(decision, discrepa)
+
+        # Los tres controles de la fila. Etiquetas de un solo caracter para que
+        # quepan sin descuadrar la rejilla, con ayuda emergente que explica que
+        # hace cada uno, porque un icono suelto no es autoexplicativo.
+        with columnas[5]:
+            if st.button(
+                "✓", key=f"ap_{gasto.identificador}",
+                help="Aprobar este gasto",
+                use_container_width=True,
+            ):
+                self._registrar_decision(gasto.identificador, "APROBADO")
+
+        with columnas[6]:
+            if st.button(
+                "✗", key=f"de_{gasto.identificador}",
+                help="Denegar este gasto",
+                use_container_width=True,
+            ):
+                self._registrar_decision(gasto.identificador, "DENEGADO")
+
+        with columnas[7]:
+            # El sobre cambia cuando el correo ya se autorizo, para que el
+            # estado sea visible sin abrir la ventana.
+            if st.button(
+                "✓✉" if enviado else "✉",
+                key=f"co_{gasto.identificador}",
+                help="Ver el correo que enviaría el agente",
+                use_container_width=True,
+            ):
+                st.session_state[self.CLAVE_CORREO_ABIERTO] = gasto.identificador
+                st.rerun()
+
+        Componentes.separador()
+
+    def _registrar_decision(self, identificador: str, decision: str) -> None:
+        """Guarda la decision del alumno sobre un gasto y repinta la pantalla."""
+        # Pulsar de nuevo el mismo boton retira la decision. Permite corregirse
+        # sin tener que recargar la pagina y perder todo lo demas.
+        decisiones = st.session_state[self.CLAVE_DECISIONES]
+        if decisiones.get(identificador) == decision:
+            decisiones.pop(identificador, None)
+        else:
+            decisiones[identificador] = decision
+        st.rerun()
+
+    def _hay_discrepancia(self, veredicto, decision: str) -> bool:
+        """Indica si la decision del alumno contradice al agente."""
+        # Sin decision no hay nada que comparar.
+        if not decision:
+            return False
+
+        # PARCIAL y REVISION no son propuestas cerradas: el agente esta
+        # pidiendo que decida una persona, asi que lo que el alumno resuelva
+        # ahi no contradice nada.
+        if veredicto.requiere_persona:
+            return False
+
+        return veredicto.tipo.value != decision
+
+    def _renderizar_balance(self, gastos, resultado) -> None:
+        """Pinta el recuento de coincidencias, discrepancias y pendientes."""
+        decisiones = st.session_state[self.CLAVE_DECISIONES]
+
+        coincidencias = 0
+        discrepancias = 0
+        for gasto in gastos:
+            decision = decisiones.get(gasto.identificador, "")
+            if not decision:
+                continue
+
+            veredicto = resultado.obtener(gasto.identificador)
+            if veredicto is None:
+                continue
+
+            if self._hay_discrepancia(veredicto, decision):
+                discrepancias += 1
+            else:
+                coincidencias += 1
+
+        pendientes = len(gastos) - coincidencias - discrepancias
+
+        # Antes de revisar nada no hay balance que mostrar.
+        if coincidencias == 0 and discrepancias == 0:
+            return
+
+        columna_a, columna_b, columna_c = st.columns(3)
+        with columna_a:
+            Componentes.tarjeta(
+                "Coincides con el agente", str(coincidencias), "", Paleta.VERDE
+            )
+        with columna_b:
+            Componentes.tarjeta(
+                "Discrepas", str(discrepancias),
+                "Justifica cada una citando la cláusula.", Paleta.ROJO,
+            )
+        with columna_c:
+            Componentes.tarjeta(
+                "Sin revisar", str(pendientes), "", Paleta.ETIQUETA
+            )
 
     def _mostrar_correo(self, identificador, gastos, resultado) -> None:
         """Abre la ventana emergente con el correo del gasto indicado."""
@@ -522,13 +662,39 @@ class VistaPrincipal:
         @st.dialog(f"Correo · {gasto.identificador}", width="large")
         def ventana() -> None:
             """Contenido de la ventana emergente."""
-            Componentes.ventana_correo(correo)
+            enviados = st.session_state[self.CLAVE_CORREOS_ENVIADOS]
+            ya_enviado = gasto.identificador in enviados
 
-            # Al cerrar hay que limpiar la seleccion; si no, la ventana se
-            # reabriria en el siguiente reejecutado del script.
-            if st.button("Cerrar", use_container_width=True):
-                st.session_state[self.CLAVE_CORREO_ABIERTO] = None
-                st.rerun()
+            Componentes.ventana_correo(correo, enviado=ya_enviado)
+
+            columna_izquierda, columna_derecha = st.columns(2)
+
+            with columna_izquierda:
+                # El boton de envio desaparece una vez usado. Es deliberado:
+                # en la vida real un correo no se puede desenviar, y que el
+                # boton no vuelva a ofrecerse traslada esa irreversibilidad.
+                if not ya_enviado:
+                    if st.button(
+                        "Enviar correo",
+                        type="primary",
+                        use_container_width=True,
+                        key=f"enviar_{gasto.identificador}",
+                    ):
+                        enviados.append(gasto.identificador)
+                        st.rerun()
+                else:
+                    st.caption("Este correo ya fue autorizado.")
+
+            with columna_derecha:
+                # Al cerrar hay que limpiar la seleccion; si no, la ventana se
+                # reabriria en el siguiente reejecutado del script.
+                if st.button(
+                    "Cerrar",
+                    use_container_width=True,
+                    key=f"cerrar_{gasto.identificador}",
+                ):
+                    st.session_state[self.CLAVE_CORREO_ABIERTO] = None
+                    st.rerun()
 
         ventana()
 

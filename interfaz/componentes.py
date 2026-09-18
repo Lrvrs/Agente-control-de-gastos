@@ -130,68 +130,98 @@ class Componentes:
         )
 
     @staticmethod
-    def tabla_veredictos(
-        gastos: ConjuntoGastos,
-        resultado: ResultadoEvaluacion,
-        identificadores_cambiados: List[str],
-    ) -> None:
-        """
-        Pinta la tabla de gastos con el veredicto de cada uno.
+    def cabecera_lista(columnas) -> None:
+        """Pinta la fila de encabezados de la lista de gastos."""
+        # Los rotulos se reparten sobre las mismas columnas que las filas de
+        # datos, de modo que todo queda alineado sin usar una tabla HTML.
+        titulos = ["Id", "Gasto", "Importe", "Agente", "Tu decisión", "", "", ""]
+        for columna, titulo in zip(columnas, titulos):
+            with columna:
+                st.markdown(
+                    f'<div class="fila-cabecera">{escape(titulo)}</div>',
+                    unsafe_allow_html=True,
+                )
 
-        Se genera HTML propio en lugar de usar el componente de tabla de
-        Streamlit porque hacen falta tres cosas que este no ofrece: distintivos
-        de color por veredicto, resaltado de filas completas y control fino de
-        la tipografia monoespaciada en las cifras.
-        """
-        # Conjunto para consulta rapida al decidir si una fila va resaltada.
-        cambiados = set(identificadores_cambiados)
-
-        filas: List[str] = []
-        for gasto in gastos:
-            veredicto = resultado.obtener(gasto.identificador)
-
-            # Un gasto sin veredicto no deberia ocurrir porque el analizador
-            # rellena los ausentes, pero se contempla por seguridad.
-            if veredicto is None:
-                continue
-
-            color = Componentes.COLOR_POR_VEREDICTO[veredicto.tipo]
-            resaltada = gasto.identificador in cambiados
-            clase_fila = "fila-cambiada" if resaltada else ""
-
-            # Marca textual que acompana al distintivo en las filas que cambian.
-            marca = '<span class="marca-cambio">CAMBIA</span>' if resaltada else ""
-
-            filas.append(
-                f'<tr class="{clase_fila}">'
-                f'  <td class="mono">{escape(gasto.identificador)}</td>'
-                f'  <td>{escape(gasto.descripcion)}<br>'
-                f'      <span class="mono" style="color:{Paleta.TEXTO_SUAVE}">'
-                f'      {escape(gasto.categoria)} · {escape(gasto.ciudad)} · '
-                f'      {escape(gasto.fecha)}</span></td>'
-                f'  <td class="mono">{gasto.importe:.2f} {escape(gasto.moneda)}</td>'
-                f'  <td><span class="distintivo" '
-                f'      style="background:{color}1A;color:{color}">'
-                f'      {escape(veredicto.tipo.value)}</span>{marca}</td>'
-                f'  <td class="mono">{escape(veredicto.clausula)}</td>'
-                f'  <td style="color:{Paleta.TEXTO_SUAVE}">'
-                f'      {escape(veredicto.motivo)}</td>'
-                f'</tr>'
-            )
-
-        # Cabecera de la tabla, con los nombres de columna en versalitas.
-        encabezado = (
-            "<tr><th>Id</th><th>Gasto</th><th>Importe</th>"
-            "<th>Veredicto</th><th>Cláusula</th><th>Motivo</th></tr>"
+    @staticmethod
+    def celda_identificador(identificador: str, resaltado: bool) -> None:
+        """Pinta el identificador del gasto, marcado si su veredicto cambio."""
+        # El asterisco senala que este veredicto se movio respecto a la
+        # ejecucion anterior, que es lo que el alumno debe mirar primero.
+        marca = (
+            f'<span class="marca-cambio">•</span>' if resaltado else ""
         )
-
         st.markdown(
-            f'<table class="tabla">{encabezado}{"".join(filas)}</table>',
+            f'<div class="mono" style="padding-top:6px">'
+            f'{escape(identificador)}{marca}</div>',
             unsafe_allow_html=True,
         )
 
     @staticmethod
-    def ventana_correo(correo: CorreoSimulado) -> None:
+    def celda_concepto(gasto) -> None:
+        """Pinta la descripcion del gasto con sus metadatos debajo."""
+        st.markdown(
+            f'<div class="celda-concepto">{escape(gasto.descripcion)}<br>'
+            f'<span class="celda-meta">{escape(gasto.categoria)} · '
+            f'{escape(gasto.ciudad)} · {escape(gasto.fecha)} · '
+            f'{escape(gasto.empleado)}</span></div>',
+            unsafe_allow_html=True,
+        )
+
+    @staticmethod
+    def celda_importe(gasto) -> None:
+        """Pinta el importe alineado en tipografia monoespaciada."""
+        st.markdown(
+            f'<div class="mono" style="padding-top:6px">'
+            f'{gasto.importe:.2f} {escape(gasto.moneda)}</div>',
+            unsafe_allow_html=True,
+        )
+
+    @staticmethod
+    def celda_veredicto(veredicto) -> None:
+        """Pinta el distintivo del veredicto del agente y su clausula."""
+        color = Componentes.COLOR_POR_VEREDICTO[veredicto.tipo]
+        st.markdown(
+            f'<div style="padding-top:4px">'
+            f'  <span class="distintivo" '
+            f'        style="background:{color}1A;color:{color}">'
+            f'    {escape(veredicto.tipo.value)}</span><br>'
+            f'  <span class="celda-meta">cláusula '
+            f'{escape(veredicto.clausula)}</span>'
+            f'</div>',
+            unsafe_allow_html=True,
+        )
+
+    @staticmethod
+    def celda_decision(decision: str, discrepa: bool) -> None:
+        """Pinta la decision del alumno, marcando si difiere de la del agente."""
+        # Sin decision todavia se indica de forma discreta, para que el alumno
+        # distinga lo que le falta por revisar de lo que ya ha resuelto.
+        if not decision:
+            st.markdown(
+                '<div class="sin-decidir" style="padding-top:8px">'
+                'sin revisar</div>',
+                unsafe_allow_html=True,
+            )
+            return
+
+        color = Paleta.VERDE if decision == "APROBADO" else Paleta.ROJO
+        marca = '<span class="discrepa">DISCREPAS</span>' if discrepa else ""
+        st.markdown(
+            f'<div style="padding-top:4px">'
+            f'  <span class="distintivo" '
+            f'        style="background:{color}1A;color:{color}">'
+            f'    {escape(decision)}</span>{marca}'
+            f'</div>',
+            unsafe_allow_html=True,
+        )
+
+    @staticmethod
+    def separador() -> None:
+        """Pinta la linea que separa una fila de la siguiente."""
+        st.markdown('<div class="separador-fila"></div>', unsafe_allow_html=True)
+
+    @staticmethod
+    def ventana_correo(correo: CorreoSimulado, enviado: bool = False) -> None:
         """
         Pinta el correo simulado con el aspecto de una ventana de redaccion.
 
@@ -200,14 +230,25 @@ class Componentes:
         efecto: el alumno entiende de un vistazo que esto es lo que llegaria
         a la bandeja de entrada de una persona.
         """
-        # El aviso de simulacion va primero y no se puede cerrar. Es una
-        # decision de honestidad: en ningun momento debe caber duda de que no
-        # se esta enviando nada.
-        st.markdown(
-            '<div class="correo-aviso">SIMULACIÓN · Este mensaje no se envía. '
-            'Es la acción que el agente ejecutaría si estuviera autorizado.</div>',
-            unsafe_allow_html=True,
-        )
+        # El aviso va primero y no se puede cerrar. Es una decision de
+        # honestidad: en ningun momento debe caber duda de que no sale ningun
+        # mensaje de la aplicacion. Cambia de texto y de color una vez el
+        # alumno ha autorizado el envio, para que la diferencia entre borrador
+        # y hecho consumado sea inmediata.
+        if enviado:
+            st.markdown(
+                '<div class="correo-enviado">ENVIADO (simulación) · '
+                'El agente ha ejecutado la acción con tu autorización. '
+                'Ningún mensaje ha salido de la aplicación.</div>',
+                unsafe_allow_html=True,
+            )
+        else:
+            st.markdown(
+                '<div class="correo-aviso">BORRADOR · SIMULACIÓN · '
+                'Revisa el mensaje antes de autorizar el envío. '
+                'Nada sale de la aplicación.</div>',
+                unsafe_allow_html=True,
+            )
 
         # Los campos de cabecera. Todo el contenido se escapa porque procede
         # de los datos del gasto y del texto que redacta el modelo.

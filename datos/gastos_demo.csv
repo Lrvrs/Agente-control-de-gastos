@@ -1,0 +1,13 @@
+id,empleado,fecha,categoria,ciudad,importe,moneda,descripcion,justificante
+G-001,Ana Ruiz,2026-09-02,alojamiento,Madrid,140.00,EUR,Hotel una noche durante el congreso,S
+G-002,Ana Ruiz,2026-09-03,alojamiento,Valladolid,140.00,EUR,Hotel una noche,S
+G-003,Luis Pardo,2026-09-04,dietas,Barcelona,52.00,EUR,Cena con cliente incluye dos copas de vino,S
+G-004,Luis Pardo,2026-09-05,transporte,Londres,85.00,GBP,Tren del aeropuerto al centro,S
+G-005,Marta Gil,2026-09-05,dietas,Sevilla,29.90,EUR,Comida de trabajo,N
+G-006,Marta Gil,2026-09-06,dietas,Sevilla,30.50,EUR,Comida de trabajo,N
+G-007,Jorge Sanz,2026-09-08,transporte,Madrid,240.00,EUR,Billete de avion en clase business,S
+G-008,Jorge Sanz,2026-09-08,otros,Madrid,180.00,EUR,Material,S
+G-009,Ana Ruiz,2026-07-28,alojamiento,Bilbao,110.00,EUR,Hotel una noche,S
+G-010,Clara Vega,2026-09-09,dietas,Valencia,48.00,EUR,Almuerzo de equipo,S
+G-011,Clara Vega,2026-09-09,dietas,Valencia,48.00,EUR,Almuerzo de equipo,S
+G-012,Jorge Sanz,2026-09-10,transporte,Madrid,64.00,EUR,Taxi del hotel a la oficina con metro a 400 metros,S

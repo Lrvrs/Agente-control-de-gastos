@@ -1,0 +1,16 @@
+# Secretos: NUNCA deben subirse al repositorio publico de GitHub.
+# Streamlit Community Cloud lee las claves desde su panel de Settings > Secrets,
+# no desde este fichero, que solo se usaria en una ejecucion local.
+.streamlit/secrets.toml
+
+# Artefactos de Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+
+# Artefactos del sistema operativo (macOS crea estos ficheros en cada carpeta)
+.DS_Store
+
+# Cache de evaluaciones generada en tiempo de ejecucion
+datos/cache_runtime/

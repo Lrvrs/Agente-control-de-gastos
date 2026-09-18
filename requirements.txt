@@ -1,0 +1,6 @@
+# Versiones fijadas a proposito.
+# Una actualizacion inesperada de Streamlit el dia de la clase es un riesgo real
+# y evitable: se fija la version para que el despliegue sea reproducible.
+streamlit==1.39.0
+pandas==2.2.3
+openai==1.54.3

@@ -1,0 +1,22 @@
+# Configuracion visual de Streamlit.
+# Define los colores base del tema para que coincidan con la identidad del panel.
+# El resto del acabado se aplica por CSS desde interfaz/estilos.py.
+
+[theme]
+base = "light"
+primaryColor = "#1B45D7"
+backgroundColor = "#FFFFFF"
+secondaryBackgroundColor = "#F4F6FB"
+textColor = "#0F1B3D"
+font = "sans serif"
+
+[server]
+# Limite de subida de ficheros en megabytes.
+# Se mantiene bajo a proposito: la aplicacion solo procesa CSV de pocas filas
+# y un limite pequeno evita que un fichero grande agote la memoria compartida
+# del contenedor gratuito de Streamlit Community Cloud.
+maxUploadSize = 2
+
+[browser]
+# Desactiva la recogida de estadisticas de uso hacia Streamlit.
+gatherUsageStats = false

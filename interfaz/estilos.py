@@ -252,6 +252,47 @@ class GestorEstilos:
             font-weight: 700; color: {Paleta.AZUL}; letter-spacing: 0.06em;
         }}
 
+        /* ---------- Ventana de correo simulado ---------- */
+
+        /* Aviso de simulacion. Va arriba del todo y en color de alerta a
+           proposito: el alumno debe tener claro en todo momento que ningun
+           mensaje sale de la aplicacion. */
+        .correo-aviso {{
+            background: #FFF4E5; border: 1px solid #F0C98A;
+            color: #8A5200; border-radius: 8px; padding: 9px 12px;
+            font-size: 11.5px; font-weight: 600; margin-bottom: 14px;
+        }}
+
+        /* Cabecera del mensaje, imitando la ventana de redaccion de un
+           cliente de correo: etiqueta a la izquierda y valor subrayado. */
+        .correo-campo {{
+            display: flex; align-items: baseline; gap: 14px;
+            padding: 9px 2px; border-bottom: 1px solid {Paleta.BORDE};
+            font-size: 13px;
+        }}
+
+        .correo-etiqueta {{
+            width: 68px; flex: 0 0 68px; color: {Paleta.TEXTO_SUAVE};
+            font-size: 12px;
+        }}
+
+        .correo-valor {{ color: {Paleta.TEXTO}; font-weight: 500; }}
+
+        .correo-valor small {{
+            color: {Paleta.TEXTO_SUAVE}; font-weight: 400;
+        }}
+
+        /* Cuerpo del mensaje. Monoespaciada porque el detalle del gasto va
+           tabulado y la alineacion es parte de la informacion. */
+        .correo-cuerpo {{
+            margin-top: 18px; padding: 16px 18px;
+            background: #FBFCFE; border: 1px solid {Paleta.BORDE};
+            border-radius: 10px;
+            font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+            font-size: 12px; line-height: 1.7; color: {Paleta.TEXTO};
+            white-space: pre-wrap;
+        }}
+
         /* ---------- Controles ---------- */
 
         /* Boton principal, en el azul de acento y con el texto en negrita. */

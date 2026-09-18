@@ -4,6 +4,7 @@ import streamlit as st
 
 from aplicacion.control_uso import ControlUso
 from aplicacion.servicio_evaluacion import ServicioEvaluacion
+from dominio.correo import RedactorCorreo
 from dominio.gasto import ConjuntoGastos
 from dominio.politica import Politica
 from dominio.veredicto import ResultadoEvaluacion, TipoVeredicto
@@ -31,6 +32,7 @@ class VistaPrincipal:
     CLAVE_ACCESO_CONCEDIDO = "acceso_concedido"
     CLAVE_GASTOS_SUBIDOS = "gastos_subidos"
     CLAVE_NOMBRE_FICHERO = "nombre_fichero_subido"
+    CLAVE_CORREO_ABIERTO = "correo_abierto"
 
     def __init__(self) -> None:
         """Construye las dependencias de la vista una sola vez por ejecucion."""
@@ -109,6 +111,9 @@ class VistaPrincipal:
         st.session_state.setdefault(self.CLAVE_GASTOS_SUBIDOS, None)
         st.session_state.setdefault(self.CLAVE_NOMBRE_FICHERO, "")
 
+        # Identificador del gasto cuyo correo se esta mostrando, o None.
+        st.session_state.setdefault(self.CLAVE_CORREO_ABIERTO, None)
+
     def _verificar_acceso(self) -> bool:
         """
         Comprueba la contrasena de clase, si se ha configurado alguna.
@@ -181,11 +186,12 @@ class VistaPrincipal:
         """Pinta la etiqueta, el titulo y el parrafo explicativo."""
         Componentes.cabecera(
             etiqueta="Panel",
-            titulo="La política manda",
+            titulo="Agente de gastos en base a política corporativa",
             entradilla_html=(
-                "Abajo tienes los gastos de un mes y la <strong>política de "
-                "viajes</strong> de la empresa. El agente evalúa cada gasto "
-                "aplicando <strong>solo</strong> esa política. "
+                "El agente evalúa cada apunte de viaje contra la "
+                "<strong>política corporativa</strong> que tienes abajo, y "
+                "para cada uno redacta el correo que enviaría al empleado o a "
+                "su responsable. "
                 "Cambia una regla, vuelve a evaluar y observa qué decisiones "
                 "se mueven: el comportamiento del sistema lo decide el texto "
                 "que escribes, no el modelo."
@@ -287,6 +293,8 @@ class VistaPrincipal:
             unsafe_allow_html=True,
         )
         Componentes.tabla_veredictos(gastos, resultado, cambiados)
+
+        self._renderizar_botonera_correos(gastos, resultado)
 
     def _renderizar_recuento(
         self, resultado: ResultadoEvaluacion, cambiados: list
@@ -456,6 +464,73 @@ class VistaPrincipal:
         if subidos is not None:
             return subidos
         return self._repositorio.cargar_gastos()
+
+    def _renderizar_botonera_correos(self, gastos, resultado) -> None:
+        """Pinta un boton por gasto para abrir el correo que generaria."""
+        st.markdown(
+            '<div class="etiqueta-seccion" style="margin-top:22px">'
+            'Correos que enviaría el agente</div>',
+            unsafe_allow_html=True,
+        )
+        st.caption(
+            "Pulsa una referencia para ver el mensaje. Nada se envía: es una "
+            "simulación de la acción que ejecutaría el agente."
+        )
+
+        # Rejilla de seis columnas. Con doce gastos salen dos filas limpias, y
+        # con menos se reparten sin dejar huecos raros.
+        lista = list(gastos)
+        columnas_por_fila = 6
+
+        for inicio in range(0, len(lista), columnas_por_fila):
+            bloque = lista[inicio : inicio + columnas_por_fila]
+            columnas = st.columns(columnas_por_fila)
+
+            for columna, gasto in zip(columnas, bloque):
+                with columna:
+                    # La clave debe ser unica y estable para que Streamlit no
+                    # confunda dos botones al reordenarse la pantalla.
+                    if st.button(
+                        gasto.identificador,
+                        key=f"correo_{gasto.identificador}",
+                        use_container_width=True,
+                    ):
+                        st.session_state[self.CLAVE_CORREO_ABIERTO] = (
+                            gasto.identificador
+                        )
+
+        # Si hay un correo seleccionado, se abre la ventana emergente.
+        identificador = st.session_state[self.CLAVE_CORREO_ABIERTO]
+        if identificador:
+            self._mostrar_correo(identificador, gastos, resultado)
+
+    def _mostrar_correo(self, identificador, gastos, resultado) -> None:
+        """Abre la ventana emergente con el correo del gasto indicado."""
+        gasto = gastos.buscar(identificador)
+        veredicto = resultado.obtener(identificador)
+
+        # Si el gasto o su veredicto ya no existen -por ejemplo porque el
+        # alumno ha subido otro fichero- se descarta la seleccion en silencio.
+        if gasto is None or veredicto is None:
+            st.session_state[self.CLAVE_CORREO_ABIERTO] = None
+            return
+
+        correo = RedactorCorreo().redactar(gasto, veredicto)
+
+        # st.dialog necesita envolver una funcion; se define aqui dentro para
+        # que capture el correo ya redactado sin pasarlo por el estado.
+        @st.dialog(f"Correo · {gasto.identificador}", width="large")
+        def ventana() -> None:
+            """Contenido de la ventana emergente."""
+            Componentes.ventana_correo(correo)
+
+            # Al cerrar hay que limpiar la seleccion; si no, la ventana se
+            # reabriria en el siguiente reejecutado del script.
+            if st.button("Cerrar", use_container_width=True):
+                st.session_state[self.CLAVE_CORREO_ABIERTO] = None
+                st.rerun()
+
+        ventana()
 
     def _politica_en_curso(self) -> Politica:
         """Construye la entidad Politica con el texto que hay en pantalla."""

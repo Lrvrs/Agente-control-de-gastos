@@ -6,6 +6,7 @@ from typing import List
 
 import streamlit as st
 
+from dominio.correo import CorreoSimulado
 from dominio.gasto import ConjuntoGastos
 from dominio.veredicto import ResultadoEvaluacion, TipoVeredicto
 from interfaz.estilos import Paleta
@@ -186,5 +187,56 @@ class Componentes:
 
         st.markdown(
             f'<table class="tabla">{encabezado}{"".join(filas)}</table>',
+            unsafe_allow_html=True,
+        )
+
+    @staticmethod
+    def ventana_correo(correo: CorreoSimulado) -> None:
+        """
+        Pinta el correo simulado con el aspecto de una ventana de redaccion.
+
+        Se reproduce la disposicion de un cliente de correo -De, Para, CC,
+        Asunto y cuerpo- porque el reconocimiento visual es la mitad del
+        efecto: el alumno entiende de un vistazo que esto es lo que llegaria
+        a la bandeja de entrada de una persona.
+        """
+        # El aviso de simulacion va primero y no se puede cerrar. Es una
+        # decision de honestidad: en ningun momento debe caber duda de que no
+        # se esta enviando nada.
+        st.markdown(
+            '<div class="correo-aviso">SIMULACIÓN · Este mensaje no se envía. '
+            'Es la acción que el agente ejecutaría si estuviera autorizado.</div>',
+            unsafe_allow_html=True,
+        )
+
+        # Los campos de cabecera. Todo el contenido se escapa porque procede
+        # de los datos del gasto y del texto que redacta el modelo.
+        campos = [
+            ("De:", f"{escape(correo.remitente_nombre)} "
+                    f"<small>&lt;{escape(correo.remitente_direccion)}&gt;</small>"),
+            ("Para:", f"{escape(correo.destinatario_nombre)} "
+                      f"<small>&lt;{escape(correo.destinatario_direccion)}&gt;</small>"),
+        ]
+
+        # La copia solo aparece cuando existe, igual que en un cliente real.
+        if correo.tiene_copia:
+            campos.append(
+                ("CC:", f"<small>&lt;{escape(correo.copia_direccion)}&gt;</small>")
+            )
+
+        campos.append(("Asunto:", escape(correo.asunto)))
+
+        for etiqueta, valor in campos:
+            st.markdown(
+                f'<div class="correo-campo">'
+                f'  <div class="correo-etiqueta">{escape(etiqueta)}</div>'
+                f'  <div class="correo-valor">{valor}</div>'
+                f'</div>',
+                unsafe_allow_html=True,
+            )
+
+        # El cuerpo se escapa entero y se respeta su formato con white-space.
+        st.markdown(
+            f'<div class="correo-cuerpo">{escape(correo.cuerpo)}</div>',
             unsafe_allow_html=True,
         )

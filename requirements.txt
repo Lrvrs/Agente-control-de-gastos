@@ -1,8 +1,14 @@
-# Versiones fijadas a proposito.
-# Una actualizacion inesperada de cualquiera de estas bibliotecas el dia de la
-# clase es un riesgo real y evitable, asi que el despliegue es reproducible.
+# Dependencias de la aplicacion. Version fijada en todas ellas a proposito:
+# una actualizacion inesperada el dia de la clase es un riesgo real y evitable.
+#
+# IMPORTANTE: este proyecto requiere Python 3.11, que se selecciona en el panel
+# de Streamlit Community Cloud (Settings > Python version). No existe forma de
+# fijarlo desde el repositorio: Streamlit no lee runtime.txt. Si se despliega
+# con una version mas reciente de Python, Pillow -que llega como dependencia
+# de Streamlit- no encuentra paquete precompilado, intenta compilarse desde el
+# codigo fuente y falla por ausencia de las cabeceras de zlib en la maquina de
+# construccion.
 streamlit==1.39.0
-pandas==2.2.3
 
 # openai 1.54.x pasaba el argumento `proxies` al construir su cliente HTTP.
 # httpx elimino ese argumento en la version 0.28, de modo que la combinacion

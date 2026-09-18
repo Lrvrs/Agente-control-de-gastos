@@ -14,3 +14,6 @@ venv/
 
 # Cache de evaluaciones generada en tiempo de ejecucion
 datos/cache_runtime/
+
+# Salidas generadas por el asistente durante la sesion de trabajo
+Claude outputs/

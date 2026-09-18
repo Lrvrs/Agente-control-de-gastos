@@ -18,3 +18,8 @@ streamlit==1.39.0
 # dos versiones incompatibles.
 openai==1.109.1
 httpx==0.28.1
+
+# Lectura de los ficheros .xlsx que suben los alumnos. Es Python puro, no
+# requiere compilacion y por tanto no reintroduce el fallo de construccion
+# que provocaron pillow y pandas en el primer despliegue.
+openpyxl==3.1.5

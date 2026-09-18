@@ -10,7 +10,7 @@ from dominio.veredicto import ResultadoEvaluacion, TipoVeredicto
 from infraestructura.cache_evaluaciones import CacheEvaluaciones
 from infraestructura.configuracion import Configuracion
 from infraestructura.proveedor_llm import ErrorProveedorLLM, FabricaProveedores
-from infraestructura.repositorio_datos import RepositorioDatos
+from infraestructura.repositorio_datos import ErrorFicheroGastos, RepositorioDatos
 from interfaz.componentes import Componentes
 from interfaz.estilos import GestorEstilos, Paleta
 
@@ -29,6 +29,8 @@ class VistaPrincipal:
     CLAVE_RESULTADO_ANTERIOR = "resultado_anterior"
     CLAVE_TEXTO_POLITICA = "texto_politica"
     CLAVE_ACCESO_CONCEDIDO = "acceso_concedido"
+    CLAVE_GASTOS_SUBIDOS = "gastos_subidos"
+    CLAVE_NOMBRE_FICHERO = "nombre_fichero_subido"
 
     def __init__(self) -> None:
         """Construye las dependencias de la vista una sola vez por ejecucion."""
@@ -73,8 +75,10 @@ class VistaPrincipal:
         Componentes.banner_superior()
         self._renderizar_cabecera()
 
-        # Los datos de gastos son fijos en esta version de la demo.
-        gastos = self._repositorio.cargar_gastos()
+        # El selector de fichero va antes que el resto porque determina sobre
+        # que datos se trabaja en toda la pantalla.
+        self._renderizar_selector_fichero()
+        gastos = self._gastos_en_curso()
 
         self._renderizar_resumen(gastos)
         self._renderizar_editor_politica(gastos)
@@ -98,6 +102,12 @@ class VistaPrincipal:
         st.session_state.setdefault(self.CLAVE_RESULTADO_ACTUAL, None)
         st.session_state.setdefault(self.CLAVE_RESULTADO_ANTERIOR, None)
         st.session_state.setdefault(self.CLAVE_ACCESO_CONCEDIDO, False)
+
+        # Gastos subidos por el alumno. Mientras valga None se usan los de
+        # ejemplo, de modo que la aplicacion es utilizable desde el segundo
+        # uno sin necesidad de buscar ningun fichero en el ordenador.
+        st.session_state.setdefault(self.CLAVE_GASTOS_SUBIDOS, None)
+        st.session_state.setdefault(self.CLAVE_NOMBRE_FICHERO, "")
 
     def _verificar_acceso(self) -> bool:
         """
@@ -190,8 +200,7 @@ class VistaPrincipal:
             Componentes.tarjeta(
                 titulo="Gastos",
                 dato=f"{len(gastos)} apuntes",
-                nota=f"Importe declarado: {gastos.importe_total():,.2f} "
-                     f"(sin convertir divisas)",
+                nota=self._describir_origen_gastos(gastos),
                 color=Paleta.AZUL,
             )
 
@@ -378,9 +387,88 @@ class VistaPrincipal:
     # Utilidades internas
     # ------------------------------------------------------------------
 
+    def _renderizar_selector_fichero(self) -> None:
+        """Pinta el control de subida del fichero de gastos."""
+        st.markdown(
+            '<div class="etiqueta-seccion">Fichero de gastos</div>',
+            unsafe_allow_html=True,
+        )
+
+        columna_subida, columna_estado = st.columns([2, 1])
+
+        with columna_subida:
+            subido = st.file_uploader(
+                "Sube tu fichero de gastos",
+                type=["csv", "xlsx", "xlsm"],
+                label_visibility="collapsed",
+            )
+
+        with columna_estado:
+            # Boton para volver al fichero de ejemplo. Solo tiene sentido
+            # mostrarlo cuando hay un fichero propio cargado.
+            if st.session_state[self.CLAVE_GASTOS_SUBIDOS] is not None:
+                if st.button("Volver al ejemplo", use_container_width=True):
+                    self._descartar_fichero_subido()
+                    st.rerun()
+
+        # Se procesa el fichero solo cuando cambia, no en cada reejecutado del
+        # script, que en Streamlit ocurre con cualquier interaccion.
+        if subido is not None and subido.name != st.session_state[self.CLAVE_NOMBRE_FICHERO]:
+            self._procesar_fichero_subido(subido)
+
+    def _procesar_fichero_subido(self, subido) -> None:
+        """Lee y valida el fichero, y lo guarda en el estado si es correcto."""
+        try:
+            gastos = self._repositorio.cargar_gastos_subidos(
+                subido.name, subido.getvalue()
+            )
+        except ErrorFicheroGastos as error:
+            # Error del fichero: es algo que el alumno puede corregir, asi que
+            # el mensaje describe el problema concreto y no se guarda nada.
+            st.error(f"{error}")
+            return
+        except Exception as error:
+            # Cualquier otro fallo se reporta sin traza, para no romper la
+            # pantalla delante de la clase.
+            st.error(f"No se ha podido procesar el fichero: {error}")
+            return
+
+        st.session_state[self.CLAVE_GASTOS_SUBIDOS] = gastos
+        st.session_state[self.CLAVE_NOMBRE_FICHERO] = subido.name
+
+        # Los resultados anteriores corresponden a otros gastos y dejarlos
+        # visibles induciria a error, asi que se descartan.
+        st.session_state[self.CLAVE_RESULTADO_ACTUAL] = None
+        st.session_state[self.CLAVE_RESULTADO_ANTERIOR] = None
+
+        st.success(f"Cargado **{subido.name}** con {len(gastos)} gastos.")
+
+    def _descartar_fichero_subido(self) -> None:
+        """Vuelve al fichero de ejemplo incluido en la aplicacion."""
+        st.session_state[self.CLAVE_GASTOS_SUBIDOS] = None
+        st.session_state[self.CLAVE_NOMBRE_FICHERO] = ""
+        st.session_state[self.CLAVE_RESULTADO_ACTUAL] = None
+        st.session_state[self.CLAVE_RESULTADO_ANTERIOR] = None
+
+    def _gastos_en_curso(self):
+        """Devuelve los gastos del alumno si los hay, o los de ejemplo."""
+        subidos = st.session_state[self.CLAVE_GASTOS_SUBIDOS]
+        if subidos is not None:
+            return subidos
+        return self._repositorio.cargar_gastos()
+
     def _politica_en_curso(self) -> Politica:
         """Construye la entidad Politica con el texto que hay en pantalla."""
         return Politica(texto=st.session_state[self.CLAVE_TEXTO_POLITICA])
+
+    def _describir_origen_gastos(self, gastos) -> str:
+        """Indica si los gastos son los de ejemplo o los que subio el alumno."""
+        # El importe total se muestra siempre; el origen solo cambia el prefijo.
+        total = f"{gastos.importe_total():,.2f} declarados"
+        nombre = st.session_state[self.CLAVE_NOMBRE_FICHERO]
+        if nombre:
+            return f"Tu fichero: {nombre}. {total}."
+        return f"Fichero de ejemplo. {total}."
 
     def _describir_estado_politica(self, politica_actual: Politica) -> str:
         """Indica si el alumno ha modificado la politica original."""

@@ -31,9 +31,12 @@ class ServicioEvaluacion:
     ESPERA_ENTRE_REINTENTOS = 3.0
 
     # Numero minimo de gastos que debe tener un lote para que tenga sentido
-    # seguir dividiendolo. Por debajo de este umbral, si la peticion sigue sin
-    # caber, el problema no es el tamano del lote y no se gana nada insistiendo.
-    TAMANO_MINIMO_DE_LOTE = 2
+    # seguir dividiendolo. Se fija en uno porque con los sistemas agenticos el
+    # consumo no depende del numero de gastos sino del material que recuperan
+    # por cada uno: reducir a un unico gasto por llamada es la unica forma de
+    # acotarlo, y con frecuencia es la que acaba haciendo falta. Cuando un solo
+    # gasto sigue sin caber, no hay nada que dividir y el error es legitimo.
+    TAMANO_MINIMO_DE_LOTE = 1
 
     def __init__(
         self,

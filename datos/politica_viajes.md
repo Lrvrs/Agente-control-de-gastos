@@ -29,11 +29,6 @@
 
 9. **Duplicidad.** No se reembolsará dos veces el mismo gasto.
 
-10. **Descripción suficiente.** Todo gasto deberá ir acompañado de una
-    descripción que permita identificar con claridad su finalidad profesional.
-    Los apuntes cuya descripción resulte insuficiente serán devueltos al
-    empleado sin resolver.
-
 ## Eventos profesionales
 
 11. **Excepción por evento.** Los límites de alojamiento podrán superarse hasta

@@ -38,6 +38,15 @@ su identificador en el motivo.
 resoluciones distintas, no elijas una en silencio. Aplica la más específica \
 si resulta claramente aplicable e indícalo en el motivo; si no está claro \
 cuál prevalece, emite REVISION explicando el conflicto.
+7. Cuando un gasto invoque una feria, un congreso o cualquier otro evento \
+como justificación, procede en este orden: identifica el evento, determina \
+sus fechas reales de celebración y comprueba si la fecha del gasto está \
+comprendida dentro de ese intervalo. Indica siempre en el motivo el periodo \
+de celebración que has aplicado, en el formato "del D al D de mes". Si la \
+fecha del gasto queda fuera de ese intervalo, la excepción por evento no es \
+de aplicación. Si no puedes determinar las fechas del evento, o no consigues \
+confirmar que el evento existe, emite REVISION y dilo explícitamente: no \
+supongas un periodo de celebración.
 
 Los cuatro veredictos posibles son exactamente: APROBADO, DENEGADO, PARCIAL \
 y REVISION.

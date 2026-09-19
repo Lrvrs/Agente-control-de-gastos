@@ -74,29 +74,26 @@ class RedactorCorreo:
         TipoVeredicto.REVISION: "Gasto {id} pendiente de revisión",
     }
 
-    # Parrafo de apertura segun el desenlace.
+    # Segundo parrafo. No repite la resolucion, que ya se ha explicado en el
+    # racional de apertura: indica su consecuencia practica, que es la duda
+    # inmediata de quien recibe el mensaje.
     APERTURAS = {
         TipoVeredicto.APROBADO: (
-            "Te confirmamos que el gasto que se detalla a continuacion ha sido "
-            "revisado y cumple la política de viajes vigente. Se tramitará su "
-            "reembolso en la próxima liquidación mensual."
+            "El importe se incluirá en la próxima liquidación mensual, sin que "
+            "sea necesaria ninguna gestión adicional por tu parte."
         ),
         TipoVeredicto.DENEGADO: (
-            "Te informamos de que el gasto que se detalla a continuacion no "
-            "puede ser reembolsado, al no ajustarse a la política de viajes "
-            "vigente."
+            "En consecuencia, el importe no se incorporará a la liquidación "
+            "del periodo."
         ),
         TipoVeredicto.PARCIAL: (
-            "Te informamos de que el gasto que se detalla a continuacion es "
-            "reembolsable solo en parte. El importe correspondiente a los "
-            "conceptos no cubiertos por la política quedará excluido de la "
-            "liquidación."
+            "Se liquidará únicamente la parte cubierta por la política; el "
+            "importe correspondiente a los conceptos excluidos quedará fuera "
+            "de la liquidación."
         ),
         TipoVeredicto.REVISION: (
-            "Elevamos a tu criterio el gasto que se detalla a continuacion. La "
-            "información disponible no permite determinar con certeza si se "
-            "ajusta a la política de viajes, por lo que requiere una decisión "
-            "por tu parte."
+            "El apunte queda en suspenso y no se liquidará mientras no se "
+            "registre una decisión al respecto."
         ),
     }
 
@@ -156,9 +153,27 @@ class RedactorCorreo:
     def _componer_cuerpo(
         self, gasto: Gasto, veredicto: Veredicto, destinatario: str
     ) -> str:
-        """Redacta el cuerpo completo del mensaje."""
+        """
+        Redacta el cuerpo completo del mensaje.
+
+        El orden de los bloques no es casual. El mensaje abre con el razonamiento
+        que ha llevado a la resolucion, antes que con cualquier otra cosa, porque
+        es lo unico que el destinatario necesita leer para entender que ha pasado
+        y por que. El detalle del gasto y el resto de la informacion van despues,
+        como respaldo de esa explicacion y no como preambulo de ella.
+
+        Esa decision tiene ademas una lectura de gobernanza: un sistema que
+        comunica primero su criterio y luego los datos se puede auditar leyendo
+        un parrafo, mientras que uno que entierra el motivo al final obliga a
+        reconstruirlo.
+        """
         # El saludo usa solo el nombre de pila cuando se dirige a una persona.
         nombre_pila = destinatario.split()[0] if destinatario else "Hola"
+
+        # Parrafo de racional. Enlaza en prosa la resolucion, la clausula
+        # aplicada y el motivo concreto, de modo que quien lo reciba entienda
+        # la decision sin consultar ninguna tabla.
+        racional = self._componer_racional(gasto, veredicto)
 
         # El bloque de detalle reproduce el apunte tal y como se presento. Es
         # lo que permite al destinatario identificar el gasto sin abrir ningun
@@ -170,29 +185,19 @@ class RedactorCorreo:
             f"    Concepto:      {gasto.descripcion}\n"
             f"    Categoría:     {gasto.categoria}\n"
             f"    Ciudad:        {gasto.ciudad}\n"
-            f"    Importe:       {gasto.importe:.2f} {gasto.moneda}\n"
+            f"    Importe:       {self._formatear_importe(gasto.importe, gasto.moneda)}\n"
             f"    Justificante:  {justificante}"
-        )
-
-        # La motivacion cita la clausula aplicada. Sin esa referencia el
-        # mensaje seria una decision sin fundamento explicito, que es
-        # justamente lo que una politica de gobernanza debe impedir.
-        motivacion = (
-            f"    Resolución:    {veredicto.tipo.value}\n"
-            f"    Cláusula:      {veredicto.clausula}\n"
-            f"    Motivo:        {veredicto.motivo}"
         )
 
         partes: List[str] = [
             f"Estimado/a {nombre_pila}:",
             "",
+            racional,
+            "",
             self.APERTURAS[veredicto.tipo],
             "",
             "DETALLE DEL GASTO",
             detalle,
-            "",
-            "RESOLUCIÓN",
-            motivacion,
             "",
             self.CIERRES[veredicto.tipo],
             "",
@@ -203,6 +208,55 @@ class RedactorCorreo:
             f"control.gestion@{self.DOMINIO}",
         ]
         return "\n".join(partes)
+
+    def _componer_racional(self, gasto: Gasto, veredicto: Veredicto) -> str:
+        """
+        Redacta el parrafo de apertura con el razonamiento de la resolucion.
+
+        Se construye en prosa a partir de tres piezas: que gasto es, que se ha
+        resuelto y por que. La cita de la clausula va integrada en la frase, no
+        como referencia suelta al final, porque el objetivo es que se lea como
+        una explicacion y no como un codigo administrativo.
+        """
+        # Verbo acorde a la resolucion. Evita la formula neutra "se ha
+        # resuelto", que obliga al lector a deducir el sentido de la decision.
+        verbos = {
+            TipoVeredicto.APROBADO: "se aprueba",
+            TipoVeredicto.DENEGADO: "no puede aprobarse",
+            TipoVeredicto.PARCIAL: "se aprueba solo en parte",
+            TipoVeredicto.REVISION: "no ha podido resolverse de forma automática",
+        }
+        verbo = verbos[veredicto.tipo]
+
+        # Referencia a la clausula, omitida cuando el agente no supo indicar
+        # ninguna: es preferible una frase mas corta que una cita vacia.
+        clausula = (veredicto.clausula or "").strip()
+        if clausula and clausula.lower() not in ("sin indicar", "-", "none"):
+            referencia = f", en aplicación de la cláusula {clausula} de la política de viajes,"
+        else:
+            referencia = ""
+
+        # El motivo se incorpora tal cual lo redacto el agente, garantizando
+        # que termina en punto para que el parrafo cierre correctamente.
+        motivo = veredicto.motivo.strip()
+        if motivo and not motivo.endswith("."):
+            motivo += "."
+
+        return (
+            f"Tras revisar el gasto {gasto.identificador}, de "
+            f"{self._formatear_importe(gasto.importe, gasto.moneda)} y con fecha "
+            f"{gasto.fecha}, "
+            f"correspondiente a «{gasto.descripcion}»{referencia} "
+            f"{verbo}. {motivo}"
+        )
+
+    def _formatear_importe(self, importe: float, moneda: str) -> str:
+        """Devuelve el importe con el formato numerico espanol."""
+        # Python formatea a la inglesa, asi que se intercambian los separadores
+        # usando una marca intermedia para no pisar el resultado a mitad.
+        ingles = f"{importe:,.2f}"
+        espanol = ingles.replace(",", "\x00").replace(".", ",").replace("\x00", ".")
+        return f"{espanol} {moneda}"
 
     def _direccion_de(self, nombre: str) -> str:
         """Construye la direccion de correo a partir del nombre del empleado."""

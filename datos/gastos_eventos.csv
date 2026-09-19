@@ -1,0 +1,4 @@
+id,empleado,fecha,categoria,ciudad,importe,moneda,descripcion,justificante
+E-001,Ana Ruiz,2026-06-10,alojamiento,Madrid,210.00,EUR,"Hotel una noche durante TECMA, Feria Internacional de Urbanismo y Medio Ambiente",S
+E-002,Ana Ruiz,2026-09-22,alojamiento,Madrid,210.00,EUR,"Hotel una noche durante TECMA, Feria Internacional de Urbanismo y Medio Ambiente",S
+E-003,Clara Vega,2026-06-11,alojamiento,Bilbao,190.00,EUR,Hotel una noche durante la Feria Internacional del Calzado de Bilbao,S

@@ -98,23 +98,31 @@ class ProveedorCompatibleOpenAI(ProveedorLLM):
         vez: con una llamada por gasto serian cientos de peticiones en rafaga y
         ningun plan gratuito lo soportaria.
         """
+        mensajes = [
+            {"role": "system", "content": instruccion_sistema},
+            {"role": "user", "content": mensaje_usuario},
+        ]
+
+        # Primer intento pidiendo explicitamente un objeto JSON. Los proveedores
+        # que soportan este modo garantizan sintaxis valida, lo que elimina la
+        # causa mas frecuente de fallo al analizar la respuesta.
         try:
-            respuesta = self._cliente.chat.completions.create(
-                model=self._configuracion.modelo,
-                temperature=self.TEMPERATURA,
-                messages=[
-                    {"role": "system", "content": instruccion_sistema},
-                    {"role": "user", "content": mensaje_usuario},
-                ],
-                # Se pide explicitamente un objeto JSON. Los proveedores que
-                # soportan este modo garantizan sintaxis valida, lo que elimina
-                # la causa mas frecuente de fallo al analizar la respuesta.
-                response_format={"type": "json_object"},
-            )
+            respuesta = self._invocar(mensajes, pedir_json=True)
         except Exception as error:
-            # Se traduce cualquier excepcion del SDK a un error propio para que
-            # la interfaz no tenga que conocer las clases del proveedor.
-            raise self._traducir_error(error) from error
+            # No todos los modelos admiten el modo JSON. Los sistemas agenticos
+            # con herramientas integradas, en particular, suelen rechazarlo.
+            # Como el modelo se elige desde la configuracion y puede cambiarse
+            # sin desplegar, la aplicacion debe tolerar ambos comportamientos:
+            # ante un rechazo de ese parametro concreto se reintenta sin el, y
+            # el analizador de respuestas, que ya es defensivo, se encarga del
+            # resto. Cualquier otro error se propaga sin reintento.
+            if not self._es_rechazo_de_modo_json(error):
+                raise self._traducir_error(error) from error
+
+            try:
+                respuesta = self._invocar(mensajes, pedir_json=False)
+            except Exception as error_reintento:
+                raise self._traducir_error(error_reintento) from error_reintento
 
         # Una respuesta sin contenido es anomala pero posible; se trata como
         # error controlado en lugar de dejar que falle al indexar.
@@ -123,6 +131,42 @@ class ProveedorCompatibleOpenAI(ProveedorLLM):
 
         contenido = respuesta.choices[0].message.content
         return contenido or ""
+
+    def _invocar(self, mensajes: list, pedir_json: bool):
+        """Realiza la llamada al proveedor, con o sin modo JSON."""
+        # Los parametros comunes se arman aparte para no duplicar la llamada.
+        parametros = {
+            "model": self._configuracion.modelo,
+            "temperature": self.TEMPERATURA,
+            "messages": mensajes,
+        }
+
+        # El modo JSON solo se anade cuando se va a pedir, porque enviarlo con
+        # valor nulo no equivale a omitirlo en todas las implementaciones.
+        if pedir_json:
+            parametros["response_format"] = {"type": "json_object"}
+
+        return self._cliente.chat.completions.create(**parametros)
+
+    def _es_rechazo_de_modo_json(self, error: Exception) -> bool:
+        """
+        Indica si el error se debe a que el modelo no admite el modo JSON.
+
+        Se distingue por el texto porque los proveedores no comparten codigos
+        de error para este caso. La comprobacion es deliberadamente estrecha:
+        solo se reintenta cuando el mensaje menciona el parametro en cuestion,
+        de modo que un fallo de credenciales o de cuota no provoque una segunda
+        llamada inutil que consumiria cupo.
+        """
+        texto = str(error).lower()
+        menciona_parametro = "response_format" in texto or "json_object" in texto
+        parece_peticion_invalida = (
+            "400" in texto
+            or "unsupported" in texto
+            or "not supported" in texto
+            or "invalid" in texto
+        )
+        return menciona_parametro and parece_peticion_invalida
 
     def _traducir_error(self, error: Exception) -> ErrorProveedorLLM:
         """

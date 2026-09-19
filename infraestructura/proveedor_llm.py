@@ -16,12 +16,21 @@ class ErrorProveedorLLM(Exception):
     lugar de una traza de Python.
     """
 
-    def __init__(self, mensaje: str, es_limite_de_ritmo: bool = False) -> None:
-        """Guarda si el error fue por exceder el ritmo permitido."""
+    def __init__(
+        self,
+        mensaje: str,
+        es_limite_de_ritmo: bool = False,
+        es_peticion_demasiado_grande: bool = False,
+    ) -> None:
+        """Guarda la naturaleza del fallo, que determina como reaccionar."""
         super().__init__(mensaje)
-        # Este indicador permite a la capa superior reintentar solo cuando tiene
-        # sentido: si la cuota se agoto, reintentar de inmediato solo empeora.
+
+        # Exceso de ritmo: tiene sentido esperar y reintentar lo mismo.
         self.es_limite_de_ritmo = es_limite_de_ritmo
+
+        # Peticion demasiado grande: reintentar lo mismo no sirve de nada, pero
+        # si se parte el trabajo en dos mitades, cada una puede caber.
+        self.es_peticion_demasiado_grande = es_peticion_demasiado_grande
 
 
 class ProveedorLLM(ABC):
@@ -177,6 +186,17 @@ class ProveedorCompatibleOpenAI(ProveedorLLM):
         tratamiento distinto -reintentar- que un error de credenciales.
         """
         texto = str(error).lower()
+
+        # El codigo 413 indica que la peticion excede el tamano admitido. Con
+        # sistemas agenticos aparece aunque el mensaje enviado sea pequeno,
+        # porque las busquedas que realizan incorporan sus resultados al
+        # contexto y es ese total, y no lo que envia la aplicacion, lo que
+        # acaba desbordando el limite.
+        if "413" in texto or "too large" in texto or "request_too_large" in texto:
+            return ErrorProveedorLLM(
+                "La peticion resulto demasiado grande para el modelo.",
+                es_peticion_demasiado_grande=True,
+            )
 
         # El codigo 429 y las menciones a cuota indican limite de ritmo.
         if "429" in texto or "rate limit" in texto or "quota" in texto:

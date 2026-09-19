@@ -30,6 +30,11 @@ class ServicioEvaluacion:
     # ventana de ritmo sin que el alumno perciba que la aplicacion se ha colgado.
     ESPERA_ENTRE_REINTENTOS = 3.0
 
+    # Numero minimo de gastos que debe tener un lote para que tenga sentido
+    # seguir dividiendolo. Por debajo de este umbral, si la peticion sigue sin
+    # caber, el problema no es el tamano del lote y no se gana nada insistiendo.
+    TAMANO_MINIMO_DE_LOTE = 2
+
     def __init__(
         self,
         proveedor: ProveedorLLM,
@@ -67,23 +72,75 @@ class ServicioEvaluacion:
             # interfaz pueda indicarlo sin alterar la entrada almacenada.
             return self._marcar_como_cache(resultado_en_cache)
 
-        # Paso 2: construir los dos mensajes de la peticion.
-        instruccion = self._constructor.construir_instruccion_sistema()
-        mensaje = self._constructor.construir_mensaje_usuario(politica, gastos)
-
-        # Paso 3: llamar al modelo, con reintentos solo ante saturacion.
-        texto_respuesta = self._llamar_con_reintentos(instruccion, mensaje)
-
-        # Paso 4: analizar la respuesta y validarla contra los gastos reales.
-        resultado = self._analizador.analizar(
-            texto_respuesta, gastos, self._proveedor.nombre_modelo
-        )
+        # Paso 2: evaluar, partiendo el conjunto si el proveedor lo rechaza
+        # por tamano. La division ocurre dentro de este metodo y es recursiva.
+        resultado = self._evaluar_conjunto(politica, gastos)
         resultado.huella_politica = politica.huella
 
         # Paso 5: guardar para que la siguiente peticion identica salga gratis.
         self._cache.guardar(politica.huella, huella_gastos, resultado)
 
         return resultado
+
+    def _evaluar_conjunto(
+        self, politica: Politica, gastos: ConjuntoGastos
+    ) -> ResultadoEvaluacion:
+        """
+        Evalua un conjunto de gastos, dividiendolo si el proveedor lo rechaza.
+
+        Un proveedor puede devolver que la peticion es demasiado grande aunque
+        el mensaje enviado sea modesto. Ocurre de forma sistematica con los
+        sistemas agenticos: cada busqueda que realizan incorpora sus resultados
+        al contexto, de modo que el tamano real de la peticion depende de
+        cuanto material recuperen y no de lo que la aplicacion escribio.
+
+        Reintentar lo mismo no arregla nada, pero evaluar la mitad de los gastos
+        genera la mitad de busquedas y suele caber. Por eso, ante ese error
+        concreto, el conjunto se parte en dos y cada mitad se evalua por
+        separado; si alguna sigue sin caber, se vuelve a partir. Los resultados
+        parciales se combinan al final y el alumno no percibe la diferencia,
+        salvo por una espera algo mayor.
+        """
+        instruccion = self._constructor.construir_instruccion_sistema()
+        mensaje = self._constructor.construir_mensaje_usuario(politica, gastos)
+
+        try:
+            texto = self._llamar_con_reintentos(instruccion, mensaje)
+        except ErrorProveedorLLM as error:
+            # Solo el rechazo por tamano justifica dividir. Y solo mientras el
+            # lote sea lo bastante grande como para que dividirlo cambie algo.
+            if not error.es_peticion_demasiado_grande:
+                raise
+            if len(gastos) < self.TAMANO_MINIMO_DE_LOTE * 2:
+                raise
+
+            return self._evaluar_por_mitades(politica, gastos)
+
+        return self._analizador.analizar(
+            texto, gastos, self._proveedor.nombre_modelo
+        )
+
+    def _evaluar_por_mitades(
+        self, politica: Politica, gastos: ConjuntoGastos
+    ) -> ResultadoEvaluacion:
+        """Divide el conjunto en dos, evalua cada mitad y combina el resultado."""
+        lista = list(gastos)
+        mitad = len(lista) // 2
+
+        # Cada mitad vuelve a entrar por el metodo general, de modo que puede
+        # dividirse otra vez si tampoco cabe.
+        primera = self._evaluar_conjunto(politica, ConjuntoGastos(lista[:mitad]))
+        segunda = self._evaluar_conjunto(politica, ConjuntoGastos(lista[mitad:]))
+
+        # Se combinan en un unico resultado, conservando el modelo utilizado.
+        combinado = ResultadoEvaluacion(
+            modelo_utilizado=self._proveedor.nombre_modelo
+        )
+        for parcial in (primera, segunda):
+            for veredicto in parcial.veredictos.values():
+                combinado.anadir(veredicto)
+
+        return combinado
 
     def _llamar_con_reintentos(self, instruccion: str, mensaje: str) -> str:
         """

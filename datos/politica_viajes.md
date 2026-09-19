@@ -33,3 +33,15 @@
     descripción que permita identificar con claridad su finalidad profesional.
     Los apuntes cuya descripción resulte insuficiente serán devueltos al
     empleado sin resolver.
+
+## Eventos profesionales
+
+11. **Excepción por evento.** Los límites de alojamiento podrán superarse hasta
+    un 60 % cuando la estancia coincida con una feria o congreso profesional
+    celebrado en la ciudad de destino, siempre que la fecha del gasto esté
+    comprendida entre las fechas de celebración del evento.
+
+12. **Verificación.** Deberá comprobarse que el evento invocado existe
+    realmente y que sus fechas incluyen la del gasto. Si el evento no puede
+    confirmarse, o si la fecha del gasto queda fuera del periodo de
+    celebración, la excepción no será de aplicación.

@@ -1,15 +1,17 @@
 id,empleado,fecha,categoria,ciudad,importe,moneda,descripcion,justificante
-G-001,Ana Ruiz,2026-09-02,alojamiento,Madrid,140.00,EUR,Hotel una noche durante el congreso,S
-G-002,Ana Ruiz,2026-09-03,alojamiento,Valladolid,140.00,EUR,Hotel una noche,S
-G-003,Luis Pardo,2026-09-04,dietas,Barcelona,78.00,EUR,Cena de trabajo,S
-G-004,Luis Pardo,2026-09-04,dietas,Barcelona,78.00,EUR,Cena de trabajo con Elena Soto directora de compras de Nortek para cerrar la renovacion del contrato,S
-G-005,Marta Gil,2026-09-05,dietas,Sevilla,28.00,EUR,Comida de trabajo en La Tasquita,N
-G-006,Marta Gil,2026-09-05,dietas,Sevilla,29.00,EUR,Comida de trabajo en La Tasquita,N
-G-007,Jorge Sanz,2026-09-08,transporte,Madrid,240.00,EUR,Billete de avion en clase business,S
-G-008,Jorge Sanz,2026-09-08,otros,Madrid,180.00,EUR,Material,S
-G-009,Clara Vega,2026-09-09,dietas,Valencia,48.00,EUR,Almuerzo de equipo,S
-G-010,Clara Vega,2026-09-09,dietas,Valencia,48.00,EUR,Almuerzo de equipo,S
-G-011,Ana Ruiz,2026-07-28,alojamiento,Bilbao,110.00,EUR,Hotel una noche,S
-G-012,Jorge Sanz,2026-09-10,transporte,Madrid,64.00,EUR,Taxi del hotel a la oficina; hay metro a 400 metros,S
-G-013,Luis Pardo,2026-09-11,otros,Barcelona,95.00,EUR,Varios,N
-G-014,Marta Gil,2026-09-12,dietas,Sevilla,86.00,EUR,Comida con el equipo de compras de Alvasa para presentar la nueva gama,S
+G-001,Luis Pardo,2026-09-04,dietas,Barcelona,78.00,EUR,Cena de trabajo,S
+G-002,Luis Pardo,2026-09-04,dietas,Barcelona,78.00,EUR,Cena de trabajo con Elena Soto directora de compras de Nortek para cerrar la renovación del contrato,S
+G-003,Marta Gil,2026-09-05,dietas,Sevilla,28.00,EUR,Comida de trabajo en La Tasquita,N
+G-004,Marta Gil,2026-09-05,dietas,Sevilla,29.00,EUR,Comida de trabajo en La Tasquita,N
+G-005,Jorge Sanz,2026-09-08,otros,Madrid,180.00,EUR,Material,S
+G-006,Luis Pardo,2026-09-11,otros,Barcelona,95.00,EUR,Varios,N
+G-007,Jorge Sanz,2026-09-10,transporte,Madrid,64.00,EUR,Taxi del hotel a la oficina; hay metro a 400 metros,S
+G-008,Marta Gil,2026-09-12,dietas,Sevilla,86.00,EUR,Comida con el equipo de compras de Alvasa para presentar la nueva gama,S
+E-001,Ana Ruiz,2026-06-10,alojamiento,Madrid,210.00,EUR,"Hotel una noche durante TECMA, Feria Internacional de Urbanismo y Medio Ambiente",S
+E-002,Ana Ruiz,2026-09-22,alojamiento,Madrid,210.00,EUR,"Hotel una noche durante TECMA, Feria Internacional de Urbanismo y Medio Ambiente",S
+E-003,Luis Pardo,2026-06-04,alojamiento,Madrid,230.00,EUR,Hotel una noche durante South Summit en La Nave,S
+E-004,Marta Gil,2026-06-07,alojamiento,Valencia,180.00,EUR,"Hotel una noche durante ExpoNadó, feria profesional de puericultura",S
+E-005,Marta Gil,2026-11-20,alojamiento,Valencia,180.00,EUR,"Hotel una noche durante ExpoNadó, feria profesional de puericultura",S
+E-006,Jorge Sanz,2026-06-10,alojamiento,Bilbao,190.00,EUR,"Hotel una noche durante el Foro BAIDATA, Semana de la Economía del Dato",S
+E-007,Jorge Sanz,2026-02-03,alojamiento,Bilbao,190.00,EUR,"Hotel una noche durante el Foro BAIDATA, Semana de la Economía del Dato",S
+E-008,Clara Vega,2026-06-11,alojamiento,Bilbao,190.00,EUR,Hotel una noche durante la Feria Internacional del Calzado de Bilbao,S

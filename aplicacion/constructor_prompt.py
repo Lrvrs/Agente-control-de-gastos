@@ -29,6 +29,15 @@ decisión. Si ninguna cláusula aplica, dilo explícitamente.
 no supongas tipos de cambio y no completes descripciones ambiguas.
 4. Si un gasto es reembolsable solo en parte, emite PARCIAL e indica qué \
 importe o qué concepto queda excluido.
+5. Algunos apuntes no pueden evaluarse de forma aislada. Antes de decidir, \
+compara cada gasto con los demás de la lista: busca duplicados y apuntes \
+fraccionados en varios importes menores para eludir un límite o la \
+obligación de justificante. Cuando la decisión dependa de otro apunte, cita \
+su identificador en el motivo.
+6. Si dos cláusulas de la política aplican al mismo gasto y conducen a \
+resoluciones distintas, no elijas una en silencio. Aplica la más específica \
+si resulta claramente aplicable e indícalo en el motivo; si no está claro \
+cuál prevalece, emite REVISION explicando el conflicto.
 
 Los cuatro veredictos posibles son exactamente: APROBADO, DENEGADO, PARCIAL \
 y REVISION.

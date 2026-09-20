@@ -38,23 +38,16 @@ su identificador en el motivo.
 resoluciones distintas, no elijas una en silencio. Aplica la más específica \
 si resulta claramente aplicable e indícalo en el motivo; si no está claro \
 cuál prevalece, emite REVISION explicando el conflicto.
-7. Cuando un gasto invoque una feria, un congreso o cualquier otro evento \
-como justificación, procede en este orden: identifica el evento, determina \
-sus fechas reales de celebración y comprueba si la fecha del gasto está \
-comprendida dentro de ese intervalo. Indica siempre en el motivo el periodo \
-de celebración que has aplicado, en el formato "del D al D de mes". Si la \
-fecha del gasto queda fuera de ese intervalo, la excepción por evento no es \
-de aplicación. Si no puedes determinar las fechas del evento, o no consigues \
-confirmar que el evento existe, emite REVISION y dilo explícitamente: no \
-supongas un periodo de celebración.
-
-Los cuatro veredictos posibles son exactamente: APROBADO, DENEGADO, PARCIAL \
-y REVISION.
-
-Responde unicamente con un objeto JSON con esta forma:
-
-{"veredictos": [{"id": "G-001", "veredicto": "APROBADO", "clausula": "1", \
-"motivo": "frase breve"}]}
+7. Cuando la justificación de un gasto se apoye en un hecho externo \
+-un evento, una empresa, un establecimiento o una ubicación-, utiliza \
+exclusivamente el bloque HECHOS VERIFICADOS que se incluye más abajo. No \
+recurras a tu conocimiento previo ni siquiera cuando creas saber la \
+respuesta: puede estar desactualizado y, sobre todo, no es verificable por \
+quien lea tu resolución. Cita en el motivo el dato concreto en que te apoyas.
+8. Si el hecho que necesitas no aparece en ese bloque, o la información \
+disponible no permite confirmarlo, emite REVISION y di exactamente qué no \
+has podido comprobar. No supongas fechas, distancias ni la existencia de \
+ninguna empresa o evento.
 
 El campo motivo debe tener una sola frase, de menos de veinticinco palabras.
 Debes incluir un elemento por cada gasto recibido, sin omitir ninguno."""
@@ -66,7 +59,10 @@ Debes incluir un elemento por cada gasto recibido, sin omitir ninguno."""
         return self.INSTRUCCION_SISTEMA
 
     def construir_mensaje_usuario(
-        self, politica: Politica, gastos: ConjuntoGastos
+        self,
+        politica: Politica,
+        gastos: ConjuntoGastos,
+        hechos: str = "",
     ) -> str:
         """
         Compone el mensaje con la politica del alumno y los gastos a evaluar.
@@ -82,10 +78,22 @@ Debes incluir un elemento por cada gasto recibido, sin omitir ninguno."""
         # barata que reduce mucho las respuestas incompletas.
         numero_gastos = len(gastos)
 
+        # Bloque de hechos verificados. Cuando esta vacio se declara de forma
+        # explicita, porque ante un hueco el modelo tiende a rellenar la laguna
+        # con lo que recuerda, mientras que ante una afirmacion clara de que no
+        # hay verificacion disponible hace lo que debe, que es escalar.
+        bloque_hechos = hechos.strip() or (
+            "No se ha podido verificar ningún hecho externo. Si la resolución "
+            "de un gasto depende de uno, emite REVISION."
+        )
+
         return (
             "POLÍTICA DE GASTOS VIGENTE\n"
             "==========================\n"
             f"{politica.texto}\n\n"
+            "HECHOS VERIFICADOS\n"
+            "==================\n"
+            f"{bloque_hechos}\n\n"
             "GASTOS A EVALUAR\n"
             "================\n"
             "Formato de cada línea: id | fecha | empleado | categoría | "

@@ -23,3 +23,7 @@ httpx==0.28.1
 # requiere compilacion y por tanto no reintroduce el fallo de construccion
 # que provocaron pillow y pandas en el primer despliegue.
 openpyxl==3.1.5
+
+# Cliente HTTP para la herramienta de verificacion de hechos. Ya venia como
+# dependencia de openai, pero se declara de forma explicita porque ahora el
+# proyecto lo usa por su cuenta y no debe depender de que otro lo arrastre.

@@ -29,14 +29,15 @@
 
 9. **Duplicidad.** No se reembolsará dos veces el mismo gasto.
 
-## Eventos profesionales
+## Verificación
 
-11. **Excepción por evento.** Los límites de alojamiento podrán superarse hasta
-    un 60 % cuando la estancia coincida con una feria o congreso profesional
-    celebrado en la ciudad de destino, siempre que la fecha del gasto esté
+11. **Hechos externos.** Cuando la justificación de un gasto se apoye en un
+    hecho externo comprobable —la celebración de una feria o congreso, la
+    existencia de una empresa, la naturaleza de un establecimiento o una
+    ubicación—, dicho hecho deberá verificarse antes de resolver. Si no puede
+    confirmarse, el gasto se someterá a revisión.
+
+12. **Excepción por evento.** Los límites de alojamiento podrán superarse
+    hasta un 60 % cuando la estancia coincida con una feria o congreso
+    profesional celebrado en la ciudad de destino y la fecha del gasto esté
     comprendida entre las fechas de celebración del evento.
-
-12. **Verificación.** Deberá comprobarse que el evento invocado existe
-    realmente y que sus fechas incluyen la del gasto. Si el evento no puede
-    confirmarse, o si la fecha del gasto queda fuera del periodo de
-    celebración, la excepción no será de aplicación.

@@ -31,6 +31,21 @@ class ConfiguracionLLM:
 
 
 @dataclass(frozen=True)
+class ConfiguracionBusqueda:
+    """Credenciales de la herramienta de verificacion de hechos."""
+
+    # Clave del servicio de busqueda. Si esta vacia, el agente funciona sin
+    # capacidad de verificar y escala los gastos que dependan de un hecho
+    # externo, que es una degradacion controlada y no un fallo.
+    clave_api: str
+
+    @property
+    def esta_configurado(self) -> bool:
+        """Indica si el agente dispone de herramienta de busqueda."""
+        return bool(self.clave_api.strip())
+
+
+@dataclass(frozen=True)
 class ConfiguracionAula:
     """Parametros que controlan el uso de la aplicacion durante la clase."""
 
@@ -72,12 +87,20 @@ class Configuracion:
         self._secretos_disponibles = self._existe_fichero_de_secretos()
 
         self._llm = self._cargar_llm()
+        self._busqueda = ConfiguracionBusqueda(
+            clave_api=self._leer("busqueda", "clave_api")
+        )
         self._aula = self._cargar_aula()
 
     @property
     def llm(self) -> ConfiguracionLLM:
         """Configuracion del proveedor del modelo de lenguaje."""
         return self._llm
+
+    @property
+    def busqueda(self) -> ConfiguracionBusqueda:
+        """Configuracion de la herramienta de verificacion."""
+        return self._busqueda
 
     @property
     def aula(self) -> ConfiguracionAula:

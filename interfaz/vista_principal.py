@@ -8,6 +8,7 @@ from dominio.correo import RedactorCorreo
 from dominio.gasto import ConjuntoGastos
 from dominio.politica import Politica
 from dominio.veredicto import ResultadoEvaluacion, TipoVeredicto
+from infraestructura.buscador_web import FabricaBuscadores
 from infraestructura.cache_evaluaciones import CacheEvaluaciones
 from infraestructura.configuracion import Configuracion
 from infraestructura.proveedor_llm import ErrorProveedorLLM, FabricaProveedores
@@ -35,6 +36,7 @@ class VistaPrincipal:
     CLAVE_CORREO_ABIERTO = "correo_abierto"
     CLAVE_CORREOS_ENVIADOS = "correos_enviados"
     CLAVE_DECISIONES = "decisiones_alumno"
+    CLAVE_TRAZA = "traza_verificacion"
 
     def __init__(self) -> None:
         """Construye las dependencias de la vista una sola vez por ejecucion."""
@@ -47,6 +49,14 @@ class VistaPrincipal:
         # para todos los alumnos que no hayan tocado la politica.
         self._cache = VistaPrincipal._obtener_cache_compartida()
 
+        # El buscador tambien se comparte entre sesiones, porque su cache
+        # interna es lo que hace viable el uso en aula: treinta alumnos
+        # evaluando el mismo fichero formulan las mismas consultas y una
+        # sola busqueda real sirve para todos.
+        self._buscador = VistaPrincipal._obtener_buscador_compartido(
+            self._configuracion.busqueda.clave_api
+        )
+
         # Control de cupo, individual de cada alumno.
         self._control_uso = ControlUso(self._configuracion.aula.limite_evaluaciones)
 
@@ -57,6 +67,15 @@ class VistaPrincipal:
         # El decorador garantiza que Streamlit construye el objeto una sola vez
         # y devuelve siempre la misma referencia a todas las sesiones.
         return CacheEvaluaciones()
+
+    @staticmethod
+    @st.cache_resource
+    def _obtener_buscador_compartido(clave_api: str):
+        """Devuelve la unica instancia de buscador del proceso."""
+        # La clave forma parte de la firma para que, si se cambia en el panel de
+        # secretos, Streamlit construya un buscador nuevo en lugar de seguir
+        # usando el anterior con las credenciales viejas.
+        return FabricaBuscadores.crear(clave_api)
 
     # ------------------------------------------------------------------
     # Punto de entrada
@@ -128,6 +147,10 @@ class VistaPrincipal:
         # entre lo que propuso el sistema y lo que decidio la persona.
         st.session_state.setdefault(self.CLAVE_DECISIONES, {})
 
+        # Traza de la ultima verificacion: que consulto el agente y que
+        # encontro. Se conserva para poder mostrarla junto a los veredictos.
+        st.session_state.setdefault(self.CLAVE_TRAZA, [])
+
     def _verificar_acceso(self) -> bool:
         """
         Comprueba la contrasena de clase, si se ha configurado alguna.
@@ -186,8 +209,13 @@ class VistaPrincipal:
         # Dato tecnico de trazabilidad: que modelo esta respondiendo y cuanto
         # cupo le queda al alumno. Es informacion que evita preguntas en clase.
         modelo = self._configuracion.llm.modelo
+        # Se indica tambien si el agente dispone de herramienta de
+        # verificacion. Es informacion relevante para interpretar sus
+        # veredictos: sin ella, escalara todo lo que dependa de un hecho
+        # externo, y conviene que eso no se confunda con un fallo.
         Componentes.pie_lateral(
             f"modelo · {modelo}\n"
+            f"verificación · {self._buscador.nombre}\n"
             f"evaluaciones · {self._control_uso.realizadas}/"
             f"{self._control_uso.limite}"
         )
@@ -301,6 +329,8 @@ class VistaPrincipal:
 
         self._renderizar_recuento(resultado, cambiados)
 
+        self._renderizar_traza_verificacion()
+
         st.markdown(
             '<div class="etiqueta-seccion" style="margin-top:18px">'
             'Veredictos</div>',
@@ -371,11 +401,15 @@ class VistaPrincipal:
             )
             return
 
-        servicio = ServicioEvaluacion(proveedor=proveedor, cache=self._cache)
+        servicio = ServicioEvaluacion(
+            proveedor=proveedor, cache=self._cache, buscador=self._buscador
+        )
 
         # El indicador de progreso importa: sin el, tres segundos de espera se
         # perciben como una aplicacion que no responde.
-        with st.spinner("El agente está aplicando tu política..."):
+        with st.spinner(
+            "El agente está verificando los datos y aplicando tu política..."
+        ):
             try:
                 resultado = servicio.evaluar(politica, gastos)
             except ErrorProveedorLLM as error:
@@ -394,6 +428,7 @@ class VistaPrincipal:
             self.CLAVE_RESULTADO_ACTUAL
         ]
         st.session_state[self.CLAVE_RESULTADO_ACTUAL] = resultado
+        st.session_state[self.CLAVE_TRAZA] = servicio.traza_verificacion
 
         # Solo descuenta cupo una llamada real al modelo.
         if not resultado.procede_de_cache:
@@ -476,6 +511,40 @@ class VistaPrincipal:
         if subidos is not None:
             return subidos
         return self._repositorio.cargar_gastos()
+
+    def _renderizar_traza_verificacion(self) -> None:
+        """
+        Muestra que decidio comprobar el agente y que encontro.
+
+        Es el panel que convierte el uso de la herramienta en algo observable.
+        Sin el, el alumno ve aparecer un veredicto y no tiene forma de saber si
+        el sistema consulto una fuente o improviso; con el, puede leer la
+        consulta que el propio agente formulo y el dato en que se apoyo.
+        """
+        traza = st.session_state[self.CLAVE_TRAZA]
+
+        # Sin verificacion no se muestra nada: un panel vacio solo estorbaria.
+        if not traza:
+            return
+
+        with st.expander(
+            f"Qué comprobó el agente antes de decidir ({len(traza)} consultas)",
+            expanded=False,
+        ):
+            for resultado in traza:
+                st.markdown(f"**{resultado.consulta}**")
+
+                if not resultado.hay_informacion:
+                    # Declarar el hueco es informacion valiosa: explica por que
+                    # un gasto acabo en revision.
+                    st.caption("Sin información disponible.")
+                    continue
+
+                if resultado.resumen:
+                    st.write(resultado.resumen)
+
+                if resultado.fuentes:
+                    st.caption("Fuentes: " + " · ".join(resultado.fuentes))
 
     # Proporciones de las columnas de cada fila. Se declaran una sola vez
     # para que la cabecera y las filas de datos queden siempre alineadas.

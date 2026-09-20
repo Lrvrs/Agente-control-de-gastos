@@ -2,12 +2,15 @@
 
 import hashlib
 import time
+from typing import List, Tuple
 
 from aplicacion.analizador_respuesta import AnalizadorRespuesta
 from aplicacion.constructor_prompt import ConstructorPrompt
+from aplicacion.planificador_verificacion import PlanificadorVerificacion
 from dominio.gasto import ConjuntoGastos
 from dominio.politica import Politica
 from dominio.veredicto import ResultadoEvaluacion
+from infraestructura.buscador_web import BuscadorWeb, ResultadoBusqueda
 from infraestructura.cache_evaluaciones import CacheEvaluaciones
 from infraestructura.proveedor_llm import ErrorProveedorLLM, ProveedorLLM
 
@@ -42,6 +45,7 @@ class ServicioEvaluacion:
         self,
         proveedor: ProveedorLLM,
         cache: CacheEvaluaciones,
+        buscador: BuscadorWeb | None = None,
         constructor: ConstructorPrompt | None = None,
         analizador: AnalizadorRespuesta | None = None,
     ) -> None:
@@ -53,6 +57,13 @@ class ServicioEvaluacion:
         """
         self._proveedor = proveedor
         self._cache = cache
+        self._buscador = buscador
+        self._planificador = PlanificadorVerificacion(proveedor)
+
+        # Traza de la ultima verificacion, para poder mostrarla en pantalla. Es
+        # lo que permite ensenar en clase que decidio buscar el agente y que
+        # encontro, en lugar de presentar el veredicto como un oraculo.
+        self.traza_verificacion: List[ResultadoBusqueda] = []
         self._constructor = constructor or ConstructorPrompt()
         self._analizador = analizador or AnalizadorRespuesta()
 
@@ -75,9 +86,16 @@ class ServicioEvaluacion:
             # interfaz pueda indicarlo sin alterar la entrada almacenada.
             return self._marcar_como_cache(resultado_en_cache)
 
-        # Paso 2: evaluar, partiendo el conjunto si el proveedor lo rechaza
-        # por tamano. La division ocurre dentro de este metodo y es recursiva.
-        resultado = self._evaluar_conjunto(politica, gastos)
+        # Paso 2: primera pasada. El agente decide que hechos externos necesita
+        # comprobar y la aplicacion ejecuta esas busquedas. Si no hay
+        # herramienta configurada, esta fase no hace nada y el bloque de hechos
+        # queda vacio, lo que llevara al agente a escalar lo que dependa de uno.
+        hechos = self._verificar_hechos(gastos)
+
+        # Paso 3: segunda pasada. Con los hechos en la mano, se emiten los
+        # veredictos, partiendo el conjunto si el proveedor lo rechaza por
+        # tamano. La division ocurre dentro de este metodo y es recursiva.
+        resultado = self._evaluar_conjunto(politica, gastos, hechos)
         resultado.huella_politica = politica.huella
 
         # Paso 5: guardar para que la siguiente peticion identica salga gratis.
@@ -85,8 +103,41 @@ class ServicioEvaluacion:
 
         return resultado
 
+    def _verificar_hechos(self, gastos: ConjuntoGastos) -> str:
+        """
+        Ejecuta la fase de verificacion y devuelve los hechos comprobados.
+
+        Devuelve una cadena vacia cuando no hay herramienta configurada o cuando
+        el agente no considera que ningun gasto dependa de un hecho externo. En
+        ambos casos la evaluacion continua: la verificacion es una capacidad
+        adicional y su ausencia se traduce en resoluciones mas prudentes, no en
+        un fallo.
+        """
+        # Se reinicia la traza en cada evaluacion, para que lo que se muestre en
+        # pantalla corresponda siempre a la ejecucion en curso.
+        self.traza_verificacion = []
+
+        # Sin herramienta capaz de comprobar nada, se omite tambien la fase de
+        # planificacion: preparar consultas que nadie va a ejecutar gastaria una
+        # llamada al modelo sin obtener nada a cambio.
+        if self._buscador is None or not self._buscador.puede_verificar:
+            return ""
+
+        # El agente decide que necesita mirar. La aplicacion no lo deduce.
+        consultas = self._planificador.planificar(gastos)
+        if not consultas:
+            return ""
+
+        bloques: List[str] = []
+        for consulta in consultas:
+            resultado = self._buscador.buscar(consulta)
+            self.traza_verificacion.append(resultado)
+            bloques.append(resultado.a_bloque_para_modelo())
+
+        return "\n\n".join(bloques)
+
     def _evaluar_conjunto(
-        self, politica: Politica, gastos: ConjuntoGastos
+        self, politica: Politica, gastos: ConjuntoGastos, hechos: str = ""
     ) -> ResultadoEvaluacion:
         """
         Evalua un conjunto de gastos, dividiendolo si el proveedor lo rechaza.
@@ -105,7 +156,9 @@ class ServicioEvaluacion:
         salvo por una espera algo mayor.
         """
         instruccion = self._constructor.construir_instruccion_sistema()
-        mensaje = self._constructor.construir_mensaje_usuario(politica, gastos)
+        mensaje = self._constructor.construir_mensaje_usuario(
+            politica, gastos, hechos
+        )
 
         try:
             texto = self._llamar_con_reintentos(instruccion, mensaje)
@@ -117,14 +170,14 @@ class ServicioEvaluacion:
             if len(gastos) < self.TAMANO_MINIMO_DE_LOTE * 2:
                 raise
 
-            return self._evaluar_por_mitades(politica, gastos)
+            return self._evaluar_por_mitades(politica, gastos, hechos)
 
         return self._analizador.analizar(
             texto, gastos, self._proveedor.nombre_modelo
         )
 
     def _evaluar_por_mitades(
-        self, politica: Politica, gastos: ConjuntoGastos
+        self, politica: Politica, gastos: ConjuntoGastos, hechos: str = ""
     ) -> ResultadoEvaluacion:
         """Divide el conjunto en dos, evalua cada mitad y combina el resultado."""
         lista = list(gastos)
@@ -132,8 +185,15 @@ class ServicioEvaluacion:
 
         # Cada mitad vuelve a entrar por el metodo general, de modo que puede
         # dividirse otra vez si tampoco cabe.
-        primera = self._evaluar_conjunto(politica, ConjuntoGastos(lista[:mitad]))
-        segunda = self._evaluar_conjunto(politica, ConjuntoGastos(lista[mitad:]))
+        # Los hechos ya verificados se reutilizan en ambas mitades: no se
+        # vuelve a buscar nada al dividir, de modo que partir el trabajo no
+        # multiplica el consumo de la cuota de busqueda.
+        primera = self._evaluar_conjunto(
+            politica, ConjuntoGastos(lista[:mitad]), hechos
+        )
+        segunda = self._evaluar_conjunto(
+            politica, ConjuntoGastos(lista[mitad:]), hechos
+        )
 
         # Se combinan en un unico resultado, conservando el modelo utilizado.
         combinado = ResultadoEvaluacion(

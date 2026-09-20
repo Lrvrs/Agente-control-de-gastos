@@ -74,42 +74,47 @@ class RedactorCorreo:
         TipoVeredicto.REVISION: "Gasto {id} pendiente de revisión",
     }
 
-    # Primera frase del mensaje, que abre el parrafo de explicacion. A partir
-    # de aqui el registro es el de una persona que ha revisado el apunte y
-    # cuenta lo que ha visto, no el de un sistema que notifica una resolucion.
+    # Primera frase del mensaje, que abre el parrafo de explicacion. El
+    # registro es el de un profesional que ha revisado el apunte y comunica el
+    # resultado: directo y sin rodeos, pero sin la familiaridad de una nota
+    # interna entre companeros. Es una comunicacion con consecuencias
+    # economicas y su tono debe corresponderse con eso.
     APERTURAS = {
-        TipoVeredicto.APROBADO: "He revisado tu gasto {id} y está todo correcto.",
+        TipoVeredicto.APROBADO: (
+            "He revisado tu gasto {id} y es conforme a la política."
+        ),
         TipoVeredicto.DENEGADO: (
-            "He estado revisando tu gasto {id} y me temo que no voy a poder "
-            "reembolsártelo."
+            "He revisado tu gasto {id} y no procede su reembolso."
         ),
         TipoVeredicto.PARCIAL: (
-            "He revisado tu gasto {id} y puedo reembolsarte una parte, pero no "
-            "el total."
+            "He revisado tu gasto {id} y solo procede el reembolso de una "
+            "parte del importe."
         ),
         TipoVeredicto.REVISION: (
-            "Te paso el gasto {id} porque no consigo resolverlo por mi cuenta."
+            "Te traslado el gasto {id} porque no dispongo de elementos "
+            "suficientes para resolverlo."
         ),
     }
 
     # Segundo parrafo: que ocurre ahora y que se espera de quien lee. Cierra la
-    # duda inmediata del destinatario en lugar de repetir la resolucion.
+    # duda inmediata del destinatario sin repetir la resolucion.
     PETICIONES = {
         TipoVeredicto.APROBADO: (
-            "Lo incluyo en la liquidación de este mes, así que no tienes que "
-            "hacer nada."
+            "Queda incluido en la liquidación de este mes. No es necesaria "
+            "ninguna gestión por tu parte."
         ),
         TipoVeredicto.DENEGADO: (
-            "De momento lo dejo fuera de la liquidación. Si crees que hay algo "
-            "que se me escapa, dímelo y lo volvemos a mirar."
+            "El importe queda excluido de la liquidación. Si dispones de "
+            "información adicional que justifique el gasto, remítemela y lo "
+            "revisaré de nuevo."
         ),
         TipoVeredicto.PARCIAL: (
-            "Liquido la parte que sí entra. Si puedes desglosarme el resto, "
-            "mándamelo y lo ajusto."
+            "Liquidaré la parte que cumple la política. Si puedes remitirme el "
+            "desglose del resto, lo ajustaré."
         ),
         TipoVeredicto.REVISION: (
-            "¿Puedes echarle un vistazo y decirme cómo lo dejamos? Mientras "
-            "tanto lo mantengo en suspenso."
+            "Te agradecería que lo valoraras y me indicaras cómo proceder. "
+            "Mientras tanto queda en suspenso."
         ),
     }
 
@@ -163,12 +168,13 @@ class RedactorCorreo:
         aplicacion es ensenar a supervisar decisiones automaticas, el mensaje
         que produce deberia ser el primero en ponerselo facil a quien supervisa.
         """
-        # Saludo con el nombre de pila. El registro es el de un companero que
-        # escribe, no el de un sistema que notifica.
+        # Saludo con el nombre de pila. Se conserva el nombre para que el
+        # mensaje siga sonando a persona, pero con la formula de cortesia que
+        # corresponde a una comunicacion con efectos economicos.
         nombre_pila = destinatario.split()[0] if destinatario else "Hola"
 
         partes: List[str] = [
-            f"Hola {nombre_pila}:",
+            f"Estimado/a {nombre_pila}:",
             "",
             self._componer_explicacion(gasto, veredicto),
             "",

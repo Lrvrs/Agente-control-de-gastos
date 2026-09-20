@@ -8,7 +8,11 @@ from aplicacion.servicio_evaluacion import ServicioEvaluacion
 from dominio.correo import RedactorCorreo
 from dominio.gasto import ConjuntoGastos
 from dominio.politica import Politica
-from dominio.veredicto import ResultadoEvaluacion, TipoVeredicto
+from dominio.veredicto import (
+    ResultadoEvaluacion,
+    TipoVeredicto,
+    firma_estructural,
+)
 from infraestructura.buscador_web import FabricaBuscadores
 from infraestructura.cache_evaluaciones import CacheEvaluaciones
 from infraestructura.configuracion import Configuracion
@@ -48,7 +52,7 @@ class VistaPrincipal:
         # reejecutados de script y se comparta entre todas las sesiones, que es
         # justamente lo que permite que la primera evaluacion del aula sirva
         # para todos los alumnos que no hayan tocado la politica.
-        self._cache = VistaPrincipal._obtener_cache_compartida()
+        self._cache = VistaPrincipal._obtener_cache_compartida(firma_estructural())
 
         # El buscador tambien se comparte entre sesiones, porque su cache
         # interna es lo que hace viable el uso en aula: treinta alumnos
@@ -63,10 +67,14 @@ class VistaPrincipal:
 
     @staticmethod
     @st.cache_resource
-    def _obtener_cache_compartida() -> CacheEvaluaciones:
+    def _obtener_cache_compartida(firma: str) -> CacheEvaluaciones:
         """Devuelve la unica instancia de cache del proceso."""
         # El decorador garantiza que Streamlit construye el objeto una sola vez
         # y devuelve siempre la misma referencia a todas las sesiones.
+        #
+        # La firma estructural forma parte de la clave a proposito: al cambiar
+        # la forma de las entidades, Streamlit construye una cache nueva y
+        # descarta la anterior, que contendria objetos de la version antigua.
         return CacheEvaluaciones()
 
     @staticmethod
@@ -125,6 +133,12 @@ class VistaPrincipal:
         # resaltar que veredictos han cambiado.
         st.session_state.setdefault(self.CLAVE_RESULTADO_ACTUAL, None)
         st.session_state.setdefault(self.CLAVE_RESULTADO_ANTERIOR, None)
+
+        # Y se descartan si proceden de una version anterior del codigo. El
+        # estado de sesion sobrevive a los redespliegues, de modo que sin esta
+        # comprobacion un veredicto antiguo llegaria a un codigo que espera
+        # campos que aquel no tiene.
+        self._descartar_resultados_caducados()
         st.session_state.setdefault(self.CLAVE_ACCESO_CONCEDIDO, False)
 
         # Gastos subidos por el alumno. Mientras valga None se usan los de
@@ -151,6 +165,32 @@ class VistaPrincipal:
         # Traza de la ultima verificacion: que consulto el agente y que
         # encontro. Se conserva para poder mostrarla junto a los veredictos.
         st.session_state.setdefault(self.CLAVE_TRAZA, [])
+
+    def _descartar_resultados_caducados(self) -> None:
+        """Elimina de la sesion los resultados de una version anterior."""
+        # Basta con examinar un veredicto cualquiera: todos se construyen con la
+        # misma clase, de modo que si uno tiene los campos actuales los tienen
+        # todos.
+        esperados = set(firma_estructural().split(","))
+
+        for clave in (self.CLAVE_RESULTADO_ACTUAL, self.CLAVE_RESULTADO_ANTERIOR):
+            resultado = st.session_state.get(clave)
+            if resultado is None:
+                continue
+
+            veredictos = getattr(resultado, "veredictos", None)
+            if not veredictos:
+                continue
+
+            muestra = next(iter(veredictos.values()))
+            presentes = set(vars(muestra).keys())
+
+            # Si falta algun campo de los que el codigo actual espera leer, el
+            # resultado entero se descarta: es preferible que el alumno vuelva a
+            # pulsar Evaluar a que la pantalla reviente.
+            if not esperados.issubset(presentes):
+                st.session_state[clave] = None
+                st.session_state[self.CLAVE_CORREO_ABIERTO] = None
 
     def _verificar_acceso(self) -> bool:
         """
@@ -526,12 +566,12 @@ class VistaPrincipal:
             return None
 
         return VistaPrincipal._obtener_generador_compartido(
-            proveedor, self._configuracion.llm.modelo
+            proveedor, self._configuracion.llm.modelo, firma_estructural()
         )
 
     @staticmethod
     @st.cache_resource
-    def _obtener_generador_compartido(_proveedor, modelo: str):
+    def _obtener_generador_compartido(_proveedor, modelo: str, firma: str):
         """Devuelve el unico generador del proceso para un modelo dado."""
         # El proveedor lleva guion bajo para que Streamlit no intente calcular
         # su huella, que no es serializable. El nombre del modelo si entra en la

@@ -1,6 +1,6 @@
 """Entidades que representan el resultado de evaluar un gasto."""
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, fields
 from enum import Enum
 from typing import Dict, List
 
@@ -162,3 +162,23 @@ class ResultadoEvaluacion:
             if veredicto_previo is None or veredicto_previo.tipo is not veredicto.tipo:
                 cambiados.append(identificador)
         return cambiados
+
+
+def firma_estructural() -> str:
+    """
+    Devuelve una huella de la forma que tienen hoy las entidades del veredicto.
+
+    Existe para resolver un problema propio de las aplicaciones que se
+    redespliegan en caliente. Streamlit conserva entre ejecuciones tanto el
+    estado de sesion como los recursos cacheados, de modo que tras un cambio de
+    codigo pueden convivir objetos creados por la version anterior con codigo
+    de la nueva. Si entretanto se ha anadido un campo, leerlo sobre un objeto
+    viejo lanza un AttributeError y la pantalla se rompe, cosa que ocurriria
+    delante de la clase.
+
+    Incluyendo esta firma en la clave de los recursos cacheados y comprobandola
+    sobre lo que hay en sesion, cualquier cambio en la estructura invalida
+    automaticamente lo anterior. No hay que acordarse de subir ningun numero de
+    version a mano, que es justo lo que nadie recuerda hacer.
+    """
+    return ",".join(campo.name for campo in fields(Veredicto))

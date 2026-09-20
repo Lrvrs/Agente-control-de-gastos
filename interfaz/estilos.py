@@ -337,6 +337,50 @@ class GestorEstilos:
             height: 1px; background: #EDF1F7; margin: 2px 0 6px 0;
         }}
 
+        /* ---------- Animaciones de entrada ---------- */
+
+        /* Entrada de la ventana emergente: aparece desde abajo, con un ligero
+           aumento de escala. La duracion es corta a proposito; una animacion
+           larga se percibe como lentitud en cuanto se ha visto dos veces. */
+        @keyframes aparecer {{
+            from {{ opacity: 0; transform: translateY(22px) scale(0.97); }}
+            to   {{ opacity: 1; transform: translateY(0)    scale(1);    }}
+        }}
+
+        /* Entrada de la ilustracion, un punto mas tardia que la del marco,
+           para que se lea como una secuencia y no como un salto. */
+        @keyframes revelar {{
+            from {{ opacity: 0; transform: scale(1.04); }}
+            to   {{ opacity: 1; transform: scale(1);    }}
+        }}
+
+        /* Se aplica a la ventana modal de Streamlit. Se seleccionan varios
+           atributos porque la biblioteca ha cambiado el nombre del suyo entre
+           versiones y conviene que la animacion sobreviva a una actualizacion. */
+        div[role="dialog"],
+        div[data-testid="stDialog"] > div,
+        div[data-modal-container] > div {{
+            animation: aparecer 340ms cubic-bezier(0.16, 0.84, 0.44, 1) both;
+        }}
+
+        /* La ilustracion de bienvenida, con su pequeno retardo. */
+        div[role="dialog"] img {{
+            animation: revelar 520ms cubic-bezier(0.16, 0.84, 0.44, 1) 120ms both;
+            border-radius: 10px;
+        }}
+
+        /* Entrada del contenido principal la primera vez que se pinta. Es un
+           matiz discreto: basta con que la pagina no aparezca de golpe. */
+        .block-container {{
+            animation: aparecer 420ms ease-out both;
+        }}
+
+        /* Pie de la ventana de bienvenida. */
+        .bienvenida-pie {{
+            text-align: center; color: {Paleta.TEXTO_SUAVE};
+            font-size: 12.5px; margin: 14px 0 4px 0; line-height: 1.6;
+        }}
+
         /* ---------- Controles ---------- */
 
         /* Boton principal, en el azul de acento y con el texto en negrita. */

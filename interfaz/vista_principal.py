@@ -1,5 +1,7 @@
 """Composicion de la pantalla principal de la aplicacion."""
 
+from pathlib import Path
+
 import streamlit as st
 
 from aplicacion.control_uso import ControlUso
@@ -42,6 +44,7 @@ class VistaPrincipal:
     CLAVE_CORREOS_ENVIADOS = "correos_enviados"
     CLAVE_DECISIONES = "decisiones_alumno"
     CLAVE_TRAZA = "traza_verificacion"
+    CLAVE_BIENVENIDA_CERRADA = "bienvenida_cerrada"
 
     def __init__(self) -> None:
         """Construye las dependencias de la vista una sola vez por ejecucion."""
@@ -100,6 +103,12 @@ class VistaPrincipal:
         # Puerta de acceso opcional. Si no hay contrasena configurada, no se
         # muestra nada y la aplicacion queda abierta.
         if not self._verificar_acceso():
+            return
+
+        # La bienvenida va antes que nada: si se muestra, detiene el pintado
+        # del resto para que la ventana no aparezca sobre una pagina a medio
+        # componer.
+        if self._mostrar_bienvenida():
             return
 
         self._renderizar_barra_lateral()
@@ -165,6 +174,51 @@ class VistaPrincipal:
         # Traza de la ultima verificacion: que consulto el agente y que
         # encontro. Se conserva para poder mostrarla junto a los veredictos.
         st.session_state.setdefault(self.CLAVE_TRAZA, [])
+
+        # La bienvenida se muestra una vez por sesion. Quien recargue la
+        # pagina volvera a verla, que es el comportamiento correcto en un
+        # aula: cada alumno la ve al entrar y nadie la ve repetida.
+        st.session_state.setdefault(self.CLAVE_BIENVENIDA_CERRADA, False)
+
+    def _mostrar_bienvenida(self) -> bool:
+        """
+        Muestra la ventana de bienvenida y devuelve si sigue abierta.
+
+        Devuelve True mientras esta visible, para que quien la invoque detenga
+        el pintado del resto de la pantalla. Aparecer sobre una pagina a medio
+        componer se nota, y lo primero que ve el alumno conviene que este bien.
+        """
+        if st.session_state[self.CLAVE_BIENVENIDA_CERRADA]:
+            return False
+
+        # Sin ilustracion no hay bienvenida que mostrar. Se comprueba antes de
+        # abrir la ventana para no presentar un marco vacio si el fichero no
+        # esta, que es el caso de cualquiera que clone el repositorio.
+        ruta = Path(__file__).resolve().parent.parent / "activos" / "bienvenida.png"
+        if not ruta.exists():
+            st.session_state[self.CLAVE_BIENVENIDA_CERRADA] = True
+            return False
+
+        @st.dialog("Agente de gastos · ESIC", width="large")
+        def ventana() -> None:
+            """Contenido de la ventana de bienvenida."""
+            Componentes.imagen_a_ancho_completo(st, str(ruta))
+
+            st.markdown(
+                '<div class="bienvenida-pie">'
+                'Vas a supervisar a un agente que revisa gastos de viaje '
+                'contra la política de la empresa.<br>'
+                'Él decide; tú confirmas o corriges.'
+                '</div>',
+                unsafe_allow_html=True,
+            )
+
+            if st.button("Continuar", type="primary", use_container_width=True):
+                st.session_state[self.CLAVE_BIENVENIDA_CERRADA] = True
+                st.rerun()
+
+        ventana()
+        return True
 
     def _descartar_resultados_caducados(self) -> None:
         """Elimina de la sesion los resultados de una version anterior."""

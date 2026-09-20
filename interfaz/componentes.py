@@ -1,6 +1,7 @@
 """Componentes visuales reutilizables de la aplicacion."""
 
 from html import escape
+import inspect
 from pathlib import Path
 from typing import List
 
@@ -34,6 +35,32 @@ class Componentes:
     }
 
     @staticmethod
+    def imagen_a_ancho_completo(contenedor, ruta: str) -> None:
+        """
+        Pinta una imagen ocupando todo el ancho disponible.
+
+        Existe porque Streamlit renombro el parametro que controla eso: las
+        versiones antiguas lo llaman use_column_width y las recientes
+        use_container_width, y pasar el que no toca lanza una excepcion.
+
+        Se resuelve consultando la firma de la funcion en tiempo de ejecucion en
+        lugar de fijar uno de los dos nombres. Asi la aplicacion sigue
+        funcionando tanto si algun dia se actualiza la version fijada en las
+        dependencias como si se mantiene la actual, y el problema no vuelve a
+        aparecer en el peor momento posible.
+        """
+        parametros = inspect.signature(contenedor.image).parameters
+
+        if "use_container_width" in parametros:
+            contenedor.image(ruta, use_container_width=True)
+        elif "use_column_width" in parametros:
+            contenedor.image(ruta, use_column_width=True)
+        else:
+            # Sin ninguno de los dos, se pinta al tamano natural: menos vistoso,
+            # pero preferible a no mostrar nada.
+            contenedor.image(ruta)
+
+    @staticmethod
     def banner_superior() -> None:
         """
         Pinta el espacio reservado para el banner de cabecera.
@@ -63,7 +90,7 @@ class Componentes:
 
         if ruta_logotipo is not None:
             # Con logotipo disponible se muestra la imagen a su ancho natural.
-            st.sidebar.image(str(ruta_logotipo), use_container_width=True)
+            Componentes.imagen_a_ancho_completo(st.sidebar, str(ruta_logotipo))
         else:
             # Sin logotipo se recurre a un cuadro con las iniciales, que mantiene
             # la composicion de la barra lateral intacta.

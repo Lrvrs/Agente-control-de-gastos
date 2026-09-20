@@ -317,43 +317,51 @@ class Componentes:
     # Texto de cada desenlace de la correccion. El titulo dice si acerto y el
     # detalle explica en una linea que hizo el agente, para que el alumno no
     # tenga que deducirlo del bloque de razonamiento que viene despues.
+    # Clase CSS, icono, titulo y coletilla de cada desenlace. El texto del
+    # detalle se completa en la pantalla con el veredicto del agente, que es el
+    # dato que el alumno necesita para situar su propia respuesta.
     TEXTOS_CORRECCION = {
         Correccion.ACERTADA: (
-            "correccion-acertada", "✓", "Correcto",
-            "Tu decisión coincide con la del agente.",
+            "correccion-acertada", "\u2713", "Correcto",
+            "y tu decisión coincide.",
         ),
         Correccion.FALLADA: (
-            "correccion-fallada", "✗", "Incorrecto",
-            "El agente resolvió lo contrario. Lee el motivo y júzgalo.",
+            "correccion-fallada", "\u2717", "Incorrecto",
+            "y tu decisión fue la contraria.",
         ),
         Correccion.MATIZADA: (
             "correccion-matizada", "!", "Ni sí ni no",
-            "Este gasto no se resuelve con una respuesta binaria.",
+            "porque el gasto no se cierra con un sí o un no.",
         ),
     }
 
     @staticmethod
-    def pantalla_resolucion(gasto, veredicto, decision: str) -> None:
+    def pantalla_resolucion(gasto, veredicto, decision: str, politica) -> None:
         """
-        Corrige la decision del alumno y le muestra el razonamiento del agente.
+        Corrige la decision del alumno citando la politica que la resuelve.
 
-        Primero la correccion, despues el argumento. Ese orden responde a lo que
-        el alumno acaba de hacer: se ha pronunciado y quiere saber si acerto. Si
-        el razonamiento fuera primero, la mitad lo saltaria para buscar el
-        resultado, y la otra mitad lo leeria ya sabiendo la respuesta.
+        La ventana es deliberadamente corta. El alumno acaba de pulsar un boton
+        y lo que necesita saber cabe en tres golpes de vista: si acerto, que
+        dice la politica y por que el agente lo resolvio asi. La ficha del
+        apunte, que antes ocupaba la mitad inferior, se ha retirado: el alumno
+        tiene el gasto delante en la fila desde la que ha pulsado, de modo que
+        repetirlo aqui solo alargaba la lectura.
+
+        El orden -correccion, clausula, motivo- responde a lo que acaba de
+        ocurrir. Si el razonamiento fuera primero, la mitad del aula lo saltaria
+        para buscar el resultado y la otra mitad lo leeria ya sabiendo la
+        respuesta.
         """
         correccion = corregir_decision(veredicto, decision)
 
-        # La franja de correccion solo aparece si el alumno se ha pronunciado.
+        # Franja de correccion. Solo aparece si el alumno se ha pronunciado.
         if correccion is not None:
-            clase, icono, titulo, detalle = Componentes.TEXTOS_CORRECCION[correccion]
+            clase, icono, titulo, coletilla = Componentes.TEXTOS_CORRECCION[correccion]
 
-            # En el caso matizado se nombra lo que el agente si dijo, porque
-            # "ni si ni no" sin mas dejaria al alumno sin saber que ocurrio.
-            if correccion is Correccion.MATIZADA:
-                detalle = (
-                    f"El agente resolvió {veredicto.tipo.value}. {detalle}"
-                )
+            # Se nombra siempre la resolucion del agente, tambien cuando el
+            # alumno ha acertado: sin ella, "correcto" no dice en que quedo el
+            # expediente, que es justo lo que hay que recordar despues.
+            detalle = f"El agente resolvió {veredicto.tipo.value} {coletilla}"
 
             st.markdown(
                 f'<div class="correccion {clase}">'
@@ -366,40 +374,28 @@ class Componentes:
                 unsafe_allow_html=True,
             )
 
-        # Resolucion del agente, como referencia de lo que se esta corrigiendo.
-        color_agente = Componentes.COLOR_POR_VEREDICTO[veredicto.tipo]
-        st.markdown(
-            f'<div class="resolucion-cara">Resolución del agente'
-            f'  <span class="distintivo" '
-            f'        style="background:{color_agente}1A;color:{color_agente}">'
-            f'  {escape(veredicto.tipo.value)}</span>'
-            f'</div>',
-            unsafe_allow_html=True,
-        )
+        # Clausula aplicada, citada literalmente de la politica que el alumno
+        # tiene en pantalla. Es la parte que convierte la correccion en algo
+        # discutible: no se le dice que se ha equivocado, se le enseña la regla
+        # con la que se le corrige para que pueda no estar de acuerdo.
+        literal = politica.texto_de_clausula(veredicto.clausula) if politica else ""
+        cita = literal or veredicto.clausula
+        if cita:
+            st.markdown(
+                f'<div class="etiqueta-seccion">Según la política de viajes</div>'
+                f'<div class="clausula-cita">{escape(cita)}</div>',
+                unsafe_allow_html=True,
+            )
 
-        # Razonamiento. El contraste de fechas, cuando existe, se separa del
-        # resto porque suele ser el dato que decide la resolucion.
+        # Razonamiento del agente. El contraste de fechas, cuando existe, se
+        # separa del resto porque suele ser el dato que decide la resolucion.
         contraste = describir_contraste_de_fechas(gasto, veredicto)
         bloque = escape(veredicto.motivo)
         if contraste:
             bloque += f'<span class="resolucion-fechas">{escape(contraste)}</span>'
 
         st.markdown(
+            f'<div class="etiqueta-seccion">Por qué</div>'
             f'<div class="resolucion-texto">{bloque}</div>',
-            unsafe_allow_html=True,
-        )
-
-        # Ficha del apunte y de la clausula aplicada, para poder comprobarlo.
-        justificante = "Sí" if gasto.tiene_justificante else "No"
-        st.markdown(
-            f'<div class="etiqueta-seccion">El apunte</div>'
-            f'<div class="celda-meta" style="line-height:1.9">'
-            f'{escape(gasto.descripcion)}<br>'
-            f'{escape(gasto.categoria)} · {escape(gasto.ciudad)} · '
-            f'{escape(gasto.fecha)} · {escape(gasto.empleado)}<br>'
-            f'{gasto.importe:.2f} {escape(gasto.moneda)} · '
-            f'justificante: {justificante} · '
-            f'cláusula aplicada: {escape(veredicto.clausula)}'
-            f'</div>',
             unsafe_allow_html=True,
         )

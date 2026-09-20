@@ -2,6 +2,7 @@
 
 from dataclasses import dataclass
 import hashlib
+import re
 
 
 @dataclass(frozen=True)
@@ -50,3 +51,71 @@ class Politica:
         # Se compara por huella y no por texto crudo para que un cambio de
         # sangrado o una linea en blanco no cuenten como modificacion real.
         return self.huella != otra.huella
+
+    # Reconoce el arranque de una clausula numerada: posibles espacios de
+    # sangrado, un numero, un punto y el resto de la linea. Es el unico formato
+    # que la politica por defecto utiliza, y el que se pide respetar al alumno
+    # que la edite.
+    _PATRON_CLAUSULA = re.compile(r"^\s*(\d+)\.\s+(.*)$")
+
+    def texto_de_clausula(self, referencia: str) -> str:
+        """
+        Devuelve el texto literal de la clausula que cita un veredicto.
+
+        El agente cita la clausula en lenguaje libre ("cláusula 12", "12.
+        Excepción por evento", "punto 5"), de modo que lo unico fiable que se
+        puede extraer de esa cita es el numero. Con el numero se recorta del
+        texto de la politica el parrafo correspondiente.
+
+        Se cita la politica viva, la que el alumno tiene en el cuadro de texto,
+        y no una copia guardada en el codigo. Asi, si la ha modificado, la
+        pantalla le muestra su propia redaccion y no la original, que es
+        precisamente lo que hace visible el efecto de haberla cambiado.
+
+        Devuelve cadena vacia cuando no hay numero en la cita o cuando ese
+        numero no existe en la politica. Es un adorno del razonamiento, no una
+        pieza de la que dependa la resolucion, asi que ante la duda se calla en
+        lugar de mostrar un parrafo equivocado.
+        """
+        if not referencia:
+            return ""
+
+        # Primer numero que aparezca en la cita. Un numero dentro de un importe
+        # ("120 EUR") no llega hasta aqui porque la cita es una referencia, no
+        # el motivo; aun asi, si no existe como clausula, el recorte falla y se
+        # devuelve cadena vacia, que es el comportamiento deseado.
+        encontrado = re.search(r"\d+", referencia)
+        if encontrado is None:
+            return ""
+        numero = encontrado.group(0)
+
+        # Se recorre la politica linea a linea acumulando el parrafo desde que
+        # arranca la clausula buscada hasta que empieza otra o hasta que
+        # aparece un encabezado de seccion.
+        recogiendo = False
+        partes: list[str] = []
+        for linea in self.texto.splitlines():
+            arranque = self._PATRON_CLAUSULA.match(linea)
+
+            if arranque is not None:
+                # Otra clausula distinta cierra la que se estaba recogiendo.
+                if recogiendo:
+                    break
+                if arranque.group(1) == numero:
+                    recogiendo = True
+                    partes.append(arranque.group(2))
+                continue
+
+            if recogiendo:
+                # Un encabezado o una linea en blanco cierran el parrafo.
+                if not linea.strip() or linea.lstrip().startswith("#"):
+                    break
+                partes.append(linea.strip())
+
+        if not partes:
+            return ""
+
+        # Se limpia el enfasis de Markdown y se colapsan los espacios, porque el
+        # parrafo va a pintarse dentro de una caja estrecha.
+        texto = " ".join(" ".join(partes).split())
+        return texto.replace("**", "").replace("*", "")

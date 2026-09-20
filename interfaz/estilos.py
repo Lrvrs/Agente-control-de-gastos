@@ -375,6 +375,16 @@ class GestorEstilos:
         /* Bloque principal con el razonamiento. Tipografia de lectura y
            tamano algo mayor de lo habitual: es el texto que el alumno debe
            leer con atencion y compara con su propia decision. */
+        /* Cita literal de la clausula de la politica. Se compone con tipo
+           ligeramente menor y en cursiva para que se lea como texto traido de
+           otro documento y no como una frase escrita por el agente. */
+        .clausula-cita {{
+            background: {Paleta.AZUL_SUAVE}; border-radius: 10px;
+            padding: 13px 16px; margin: 2px 0 16px 0;
+            font-size: 13px; line-height: 1.6; font-style: italic;
+            color: {Paleta.MARINO};
+        }}
+
         .resolucion-texto {{
             background: #FBFCFE; border: 1px solid {Paleta.BORDE};
             border-left: 3px solid {Paleta.AZUL};

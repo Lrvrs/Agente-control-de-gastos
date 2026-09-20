@@ -147,11 +147,13 @@ class VistaPrincipal:
         """Inicializa las claves del estado de sesion si es la primera visita."""
         # La politica arranca con el texto por defecto del repositorio; a partir
         # de ahi el alumno la edita y su version vive en la sesion.
-        # Se restituye tambien si la clave existe pero quedo a None, situacion
-        # que puede darse si Streamlit descarta el estado de un widget que no
-        # llego a dibujarse. Un cuadro de politica vacio bloquea el ejercicio
-        # entero, asi que conviene que sea imposible llegar a el por accidente.
-        if st.session_state.get(self.CLAVE_TEXTO_POLITICA) is None:
+        # Se restituye si falta, si vale None o si quedo en blanco. Las tres
+        # situaciones son posibles -y la ultima se dio en produccion, heredada
+        # de una version anterior que perdia el estado del widget- y las tres
+        # dejan la aplicacion inservible, porque una politica vacia no se puede
+        # construir. Restituir el texto por defecto es siempre preferible a que
+        # el alumno se encuentre la pantalla rota.
+        if not (st.session_state.get(self.CLAVE_TEXTO_POLITICA) or "").strip():
             st.session_state[self.CLAVE_TEXTO_POLITICA] = (
                 self._repositorio.cargar_politica().texto
             )
@@ -956,8 +958,23 @@ class VistaPrincipal:
         ventana()
 
     def _politica_en_curso(self) -> Politica:
-        """Construye la entidad Politica con el texto que hay en pantalla."""
-        return Politica(texto=st.session_state[self.CLAVE_TEXTO_POLITICA])
+        """
+        Construye la entidad Politica con el texto que hay en pantalla.
+
+        Si por cualquier via ese texto llegase vacio, se recurre al del
+        repositorio en lugar de propagar una excepcion. Esta salvaguarda es la
+        ultima de tres, y existe porque este metodo se invoca desde el pintado
+        de la pantalla: un fallo aqui no produce un mensaje de error, produce
+        una pagina rota, que es lo unico que no puede ocurrir durante una clase.
+        """
+        texto = st.session_state.get(self.CLAVE_TEXTO_POLITICA) or ""
+
+        if not texto.strip():
+            politica = self._repositorio.cargar_politica()
+            st.session_state[self.CLAVE_TEXTO_POLITICA] = politica.texto
+            return politica
+
+        return Politica(texto=texto)
 
     def _describir_origen_gastos(self, gastos) -> str:
         """Indica si los gastos son los de ejemplo o los que subio el alumno."""

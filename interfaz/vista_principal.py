@@ -1,5 +1,6 @@
 """Composicion de la pantalla principal de la aplicacion."""
 
+import hashlib
 from pathlib import Path
 
 import streamlit as st
@@ -36,7 +37,17 @@ class VistaPrincipal:
     # erratas silenciosas, que son el fallo tipico al usar cadenas sueltas.
     CLAVE_RESULTADO_ACTUAL = "resultado_actual"
     CLAVE_RESULTADO_ANTERIOR = "resultado_anterior"
-    CLAVE_TEXTO_POLITICA = "texto_politica"
+    # Almacen del texto de la politica. NO es la clave del widget, y esa
+    # separacion es deliberada: Streamlit borra del estado de sesion las claves
+    # de los widgets que no se dibujan en una ejecucion, de modo que guardar ahi
+    # el dato lo hace vulnerable a cualquier cambio en el orden de pintado. Con
+    # el valor en una clave propia, que la biblioteca nunca toca, el contenido
+    # sobrevive pase lo que pase en la pantalla.
+    CLAVE_TEXTO_POLITICA = "politica_almacenada"
+
+    # Clave del cuadro de texto. Puede ser descartada por Streamlit sin
+    # consecuencias, porque el valor bueno esta en la anterior.
+    CLAVE_WIDGET_POLITICA = "widget_politica"
     CLAVE_ACCESO_CONCEDIDO = "acceso_concedido"
     CLAVE_GASTOS_SUBIDOS = "gastos_subidos"
     CLAVE_NOMBRE_FICHERO = "nombre_fichero_subido"
@@ -292,6 +303,36 @@ class VistaPrincipal:
     # Barra lateral
     # ------------------------------------------------------------------
 
+    @staticmethod
+    @st.cache_data
+    def _huella_del_codigo() -> str:
+        """
+        Devuelve una huella corta del codigo fuente que se esta ejecutando.
+
+        Sirve para responder de un vistazo a una pregunta que aparece en cada
+        iteracion: si lo que corre en el servidor es lo ultimo que se subio.
+        Comparar la huella que muestra la aplicacion con la que imprime el
+        repositorio resuelve la duda sin conjeturas, y evita perseguir fallos
+        que en realidad ya estaban corregidos.
+
+        Se calcula una sola vez por proceso, de modo que su coste es
+        irrelevante.
+        """
+        raiz = Path(__file__).resolve().parent.parent
+        resumen = hashlib.sha256()
+
+        # Se recorren los fuentes en orden estable para que la huella sea
+        # reproducible, y se incluyen tambien los datos, porque un cambio en la
+        # politica o en los gastos tambien es un cambio de version.
+        for ruta in sorted(raiz.rglob("*.py")) + sorted(raiz.glob("datos/*")):
+            try:
+                resumen.update(ruta.read_bytes())
+            except OSError:
+                # Un fichero ilegible no debe impedir el arranque.
+                continue
+
+        return resumen.hexdigest()[:7]
+
     def _renderizar_barra_lateral(self) -> None:
         """Pinta la identidad, la navegacion y el pie tecnico."""
         Componentes.marca_lateral()
@@ -317,7 +358,8 @@ class VistaPrincipal:
             f"modelo · {modelo}\n"
             f"verificación · {self._buscador.nombre}\n"
             f"evaluaciones · {self._control_uso.realizadas}/"
-            f"{self._control_uso.limite}"
+            f"{self._control_uso.limite}\n"
+            f"versión · {VistaPrincipal._huella_del_codigo()}"
         )
 
     # ------------------------------------------------------------------
@@ -379,14 +421,18 @@ class VistaPrincipal:
             unsafe_allow_html=True,
         )
 
-        # El cuadro de texto escribe directamente en el estado de sesion a
-        # traves de su clave, de modo que el valor persiste entre reejecutados.
-        st.text_area(
+        # El cuadro se inicializa con el valor almacenado y devuelve lo que el
+        # alumno haya escrito, que se guarda de vuelta en el almacen. Ese viaje
+        # de ida y vuelta es lo que hace que el contenido no dependa de la
+        # supervivencia de la clave del widget.
+        texto = st.text_area(
             label="Política",
-            key=self.CLAVE_TEXTO_POLITICA,
+            value=st.session_state[self.CLAVE_TEXTO_POLITICA],
+            key=self.CLAVE_WIDGET_POLITICA,
             height=260,
             label_visibility="collapsed",
         )
+        st.session_state[self.CLAVE_TEXTO_POLITICA] = texto
 
         columna_boton, columna_aviso = st.columns([1, 3])
 

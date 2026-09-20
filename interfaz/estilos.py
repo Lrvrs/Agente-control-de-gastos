@@ -339,6 +339,39 @@ class GestorEstilos:
 
         /* ---------- Pantalla de resolucion ---------- */
 
+        /* Franja superior con el resultado de la correccion. Ocupa todo el
+           ancho y es lo primero que se ve al abrir la pantalla: el alumno
+           acaba de pronunciarse y lo que espera es saber si acerto. */
+        .correccion {{
+            border-radius: 12px; padding: 16px 20px; margin-bottom: 18px;
+            display: flex; align-items: center; gap: 14px;
+        }}
+
+        .correccion-icono {{
+            font-size: 26px; line-height: 1; flex: 0 0 auto;
+        }}
+
+        .correccion-titulo {{
+            font-size: 17px; font-weight: 800; letter-spacing: -0.01em;
+        }}
+
+        .correccion-detalle {{
+            font-size: 12.5px; margin-top: 3px; opacity: 0.85;
+        }}
+
+        /* Los tres desenlaces, con sus colores. */
+        .correccion-acertada {{
+            background: #E7F6EF; border: 1px solid #A7DCC4; color: #076B47;
+        }}
+
+        .correccion-fallada {{
+            background: #FDECEA; border: 1px solid #F3B7B0; color: #8C1D13;
+        }}
+
+        .correccion-matizada {{
+            background: #FFF4E5; border: 1px solid #F0C98A; color: #8A5200;
+        }}
+
         /* Bloque principal con el razonamiento. Tipografia de lectura y
            tamano algo mayor de lo habitual: es el texto que el alumno debe
            leer con atencion y compara con su propia decision. */

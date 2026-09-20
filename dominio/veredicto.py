@@ -182,3 +182,51 @@ def firma_estructural() -> str:
     version a mano, que es justo lo que nadie recuerda hacer.
     """
     return ",".join(campo.name for campo in fields(Veredicto))
+
+
+class Correccion(str, Enum):
+    """
+    Resultado de contrastar la decisión del alumno con la del agente.
+
+    Se declara en el dominio y no en la interfaz porque es una regla del
+    ejercicio, no una cuestión de presentación: decide qué se considera acertar
+    y qué no, y conviene que esa definición esté en un solo sitio y pueda
+    probarse sin levantar una pantalla.
+    """
+
+    # El alumno resolvió igual que el agente.
+    ACERTADA = "ACERTADA"
+
+    # El alumno resolvió lo contrario de lo que el agente había concluido.
+    FALLADA = "FALLADA"
+
+    # El agente no emitió un sí ni un no, de modo que ninguna de las dos
+    # respuestas del alumno puede calificarse de correcta o incorrecta.
+    MATIZADA = "MATIZADA"
+
+
+def corregir_decision(veredicto: Veredicto, decision: str) -> Correccion | None:
+    """
+    Contrasta la decisión del alumno con la resolución del agente.
+
+    Devuelve None cuando el alumno todavía no se ha pronunciado, porque
+    entonces no hay nada que corregir.
+
+    Los veredictos PARCIAL y REVISION reciben trato propio y no se cuentan como
+    fallo. En ellos el agente no ha afirmado que el gasto proceda ni que no
+    proceda: en el primero sostiene que solo una parte es reembolsable y en el
+    segundo declara que no puede resolverlo. Calificar de incorrecta una
+    respuesta binaria ante un caso que no lo es seria enseñar lo contrario de lo
+    que el ejercicio pretende, que es precisamente reconocer cuándo un problema
+    no se cierra con un sí o un no.
+    """
+    if not decision:
+        return None
+
+    if veredicto.requiere_persona:
+        return Correccion.MATIZADA
+
+    if veredicto.tipo.value == decision:
+        return Correccion.ACERTADA
+
+    return Correccion.FALLADA

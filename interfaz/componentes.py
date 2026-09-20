@@ -9,7 +9,12 @@ import streamlit as st
 
 from dominio.correo import CorreoSimulado, describir_contraste_de_fechas
 from dominio.gasto import ConjuntoGastos
-from dominio.veredicto import ResultadoEvaluacion, TipoVeredicto
+from dominio.veredicto import (
+    Correccion,
+    ResultadoEvaluacion,
+    TipoVeredicto,
+    corregir_decision,
+)
 from interfaz.estilos import Paleta
 
 
@@ -309,35 +314,68 @@ class Componentes:
             unsafe_allow_html=True,
         )
 
+    # Texto de cada desenlace de la correccion. El titulo dice si acerto y el
+    # detalle explica en una linea que hizo el agente, para que el alumno no
+    # tenga que deducirlo del bloque de razonamiento que viene despues.
+    TEXTOS_CORRECCION = {
+        Correccion.ACERTADA: (
+            "correccion-acertada", "✓", "Correcto",
+            "Tu decisión coincide con la del agente.",
+        ),
+        Correccion.FALLADA: (
+            "correccion-fallada", "✗", "Incorrecto",
+            "El agente resolvió lo contrario. Lee el motivo y júzgalo.",
+        ),
+        Correccion.MATIZADA: (
+            "correccion-matizada", "!", "Ni sí ni no",
+            "Este gasto no se resuelve con una respuesta binaria.",
+        ),
+    }
+
     @staticmethod
     def pantalla_resolucion(gasto, veredicto, decision: str) -> None:
         """
-        Pinta el razonamiento del agente sobre un gasto y la decision tomada.
+        Corrige la decision del alumno y le muestra el razonamiento del agente.
 
-        Enfrenta ambas resoluciones en la cabecera, sin calificar la diferencia.
-        La comparacion se muestra; el juicio sobre ella lo hace el alumno, que
-        es justamente el ejercicio.
+        Primero la correccion, despues el argumento. Ese orden responde a lo que
+        el alumno acaba de hacer: se ha pronunciado y quiere saber si acerto. Si
+        el razonamiento fuera primero, la mitad lo saltaria para buscar el
+        resultado, y la otra mitad lo leeria ya sabiendo la respuesta.
         """
-        # Cabecera con las dos resoluciones enfrentadas.
+        correccion = corregir_decision(veredicto, decision)
+
+        # La franja de correccion solo aparece si el alumno se ha pronunciado.
+        if correccion is not None:
+            clase, icono, titulo, detalle = Componentes.TEXTOS_CORRECCION[correccion]
+
+            # En el caso matizado se nombra lo que el agente si dijo, porque
+            # "ni si ni no" sin mas dejaria al alumno sin saber que ocurrio.
+            if correccion is Correccion.MATIZADA:
+                detalle = (
+                    f"El agente resolvió {veredicto.tipo.value}. {detalle}"
+                )
+
+            st.markdown(
+                f'<div class="correccion {clase}">'
+                f'  <div class="correccion-icono">{icono}</div>'
+                f'  <div>'
+                f'    <div class="correccion-titulo">{escape(titulo)}</div>'
+                f'    <div class="correccion-detalle">{escape(detalle)}</div>'
+                f'  </div>'
+                f'</div>',
+                unsafe_allow_html=True,
+            )
+
+        # Resolucion del agente, como referencia de lo que se esta corrigiendo.
         color_agente = Componentes.COLOR_POR_VEREDICTO[veredicto.tipo]
-        cabecera = (
-            f'<div class="resolucion-cara">El agente resolvió'
+        st.markdown(
+            f'<div class="resolucion-cara">Resolución del agente'
             f'  <span class="distintivo" '
             f'        style="background:{color_agente}1A;color:{color_agente}">'
             f'  {escape(veredicto.tipo.value)}</span>'
+            f'</div>',
+            unsafe_allow_html=True,
         )
-
-        if decision:
-            color_alumno = Paleta.VERDE if decision == "APROBADO" else Paleta.ROJO
-            cabecera += (
-                f'  · tú has decidido'
-                f'  <span class="distintivo" '
-                f'        style="background:{color_alumno}1A;color:{color_alumno}">'
-                f'  {escape(decision)}</span>'
-            )
-
-        cabecera += "</div>"
-        st.markdown(cabecera, unsafe_allow_html=True)
 
         # Razonamiento. El contraste de fechas, cuando existe, se separa del
         # resto porque suele ser el dato que decide la resolucion.

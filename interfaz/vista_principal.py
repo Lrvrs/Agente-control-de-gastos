@@ -105,12 +105,6 @@ class VistaPrincipal:
         if not self._verificar_acceso():
             return
 
-        # La bienvenida va antes que nada: si se muestra, detiene el pintado
-        # del resto para que la ventana no aparezca sobre una pagina a medio
-        # componer.
-        if self._mostrar_bienvenida():
-            return
-
         self._renderizar_barra_lateral()
 
         Componentes.banner_superior()
@@ -125,6 +119,15 @@ class VistaPrincipal:
         self._renderizar_editor_politica(gastos)
         self._renderizar_resultados(gastos)
 
+        # La bienvenida se abre al final, cuando el resto de la pantalla ya se
+        # ha compuesto. El orden importa y no por estetica: Streamlit descarta
+        # el estado de los widgets que no se dibujan en una ejecucion, de modo
+        # que interrumpir el pintado dejaba el cuadro de la politica vacio al
+        # cerrar la ventana. Dibujarlo todo y superponer la modal encima evita
+        # el problema de raiz, y visualmente es lo mismo porque la modal oscurece
+        # el fondo.
+        self._mostrar_bienvenida()
+
     # ------------------------------------------------------------------
     # Estado y acceso
     # ------------------------------------------------------------------
@@ -133,7 +136,11 @@ class VistaPrincipal:
         """Inicializa las claves del estado de sesion si es la primera visita."""
         # La politica arranca con el texto por defecto del repositorio; a partir
         # de ahi el alumno la edita y su version vive en la sesion.
-        if self.CLAVE_TEXTO_POLITICA not in st.session_state:
+        # Se restituye tambien si la clave existe pero quedo a None, situacion
+        # que puede darse si Streamlit descarta el estado de un widget que no
+        # llego a dibujarse. Un cuadro de politica vacio bloquea el ejercicio
+        # entero, asi que conviene que sea imposible llegar a el por accidente.
+        if st.session_state.get(self.CLAVE_TEXTO_POLITICA) is None:
             st.session_state[self.CLAVE_TEXTO_POLITICA] = (
                 self._repositorio.cargar_politica().texto
             )
@@ -180,16 +187,15 @@ class VistaPrincipal:
         # aula: cada alumno la ve al entrar y nadie la ve repetida.
         st.session_state.setdefault(self.CLAVE_BIENVENIDA_CERRADA, False)
 
-    def _mostrar_bienvenida(self) -> bool:
+    def _mostrar_bienvenida(self) -> None:
         """
-        Muestra la ventana de bienvenida y devuelve si sigue abierta.
+        Abre la ventana de bienvenida la primera vez que se entra.
 
-        Devuelve True mientras esta visible, para que quien la invoque detenga
-        el pintado del resto de la pantalla. Aparecer sobre una pagina a medio
-        componer se nota, y lo primero que ve el alumno conviene que este bien.
+        Se invoca al final del renderizado, con el resto de la pantalla ya
+        compuesta, y la modal se superpone oscureciendo el fondo.
         """
         if st.session_state[self.CLAVE_BIENVENIDA_CERRADA]:
-            return False
+            return
 
         # Sin ilustracion no hay bienvenida que mostrar. Se comprueba antes de
         # abrir la ventana para no presentar un marco vacio si el fichero no
@@ -197,7 +203,7 @@ class VistaPrincipal:
         ruta = Path(__file__).resolve().parent.parent / "activos" / "bienvenida.png"
         if not ruta.exists():
             st.session_state[self.CLAVE_BIENVENIDA_CERRADA] = True
-            return False
+            return
 
         @st.dialog("Agente de gastos · ESIC", width="large")
         def ventana() -> None:
@@ -218,7 +224,6 @@ class VistaPrincipal:
                 st.rerun()
 
         ventana()
-        return True
 
     def _descartar_resultados_caducados(self) -> None:
         """Elimina de la sesion los resultados de una version anterior."""

@@ -44,6 +44,47 @@ def formatear_importe(importe: float, moneda: str) -> str:
     return f"{espanol} {moneda}"
 
 
+def describir_contraste_de_fechas(gasto, veredicto) -> str:
+    """
+    Redacta la frase que confronta la fecha del gasto con la del evento.
+
+    Vive a nivel de modulo porque la necesitan dos consumidores: el correo que
+    se envia al empleado y la pantalla de resolucion que consulta el alumno.
+    Tenerla en un solo sitio garantiza que ambos digan exactamente lo mismo, que
+    es lo minimo exigible cuando uno de los dos justifica al otro.
+
+    Devuelve cadena vacia si no consta el periodo del evento.
+    """
+    if not veredicto.tiene_periodo_de_evento:
+        return ""
+
+    fecha_gasto = formatear_fecha(gasto.fecha)
+    desde = formatear_fecha(veredicto.evento_desde)
+    hasta = formatear_fecha(veredicto.evento_hasta)
+    evento = veredicto.evento.strip()
+
+    # La conjuncion cambia segun encaje o no: una confirma, la otra senala la
+    # discrepancia, y conviene que la frase lo diga sin que haya que deducirlo.
+    dentro = (
+        veredicto.evento_desde.strip()
+        <= gasto.fecha.strip()
+        <= veredicto.evento_hasta.strip()
+    )
+
+    if dentro:
+        return (
+            f"El gasto es del {fecha_gasto} y {evento} se celebró del {desde} "
+            f"al {hasta}, de modo que la estancia queda dentro del periodo "
+            f"del evento."
+        )
+
+    return (
+        f"El gasto es del {fecha_gasto}, mientras que {evento} se celebró del "
+        f"{desde} al {hasta}. La fecha del apunte queda por tanto fuera del "
+        f"periodo del evento."
+    )
+
+
 @dataclass(frozen=True)
 class CorreoSimulado:
     """
@@ -360,45 +401,8 @@ class RedactorCorreo:
     def _componer_contraste_de_fechas(
         self, gasto: Gasto, veredicto: Veredicto
     ) -> str:
-        """
-        Redacta la frase que confronta la fecha del gasto con la del evento.
-
-        Es el dato decisivo en estos casos y por eso lo compone la aplicacion a
-        partir de campos, en lugar de confiarlo a la redaccion del modelo. Asi
-        la frase sale siempre igual, con las dos fechas completas y sin
-        ambiguedad, y quien la lee puede comprobarla sin abrir nada mas.
-
-        Devuelve cadena vacia cuando no consta el periodo del evento, porque en
-        ese caso no hay nada que contrastar.
-        """
-        if not veredicto.tiene_periodo_de_evento:
-            return ""
-
-        fecha_gasto = self._formatear_fecha(gasto.fecha)
-        desde = self._formatear_fecha(veredicto.evento_desde)
-        hasta = self._formatear_fecha(veredicto.evento_hasta)
-        evento = veredicto.evento.strip()
-
-        # Se distingue si la fecha encaja o no, porque la conjuncion cambia el
-        # sentido de la frase: una confirma y la otra senala la discrepancia.
-        dentro = (
-            veredicto.evento_desde.strip()
-            <= gasto.fecha.strip()
-            <= veredicto.evento_hasta.strip()
-        )
-
-        if dentro:
-            return (
-                f"El gasto es del {fecha_gasto} y {evento} se celebró del "
-                f"{desde} al {hasta}, de modo que la estancia queda dentro "
-                f"del periodo del evento."
-            )
-
-        return (
-            f"El gasto es del {fecha_gasto}, mientras que {evento} se celebró "
-            f"del {desde} al {hasta}. La fecha del apunte queda por tanto "
-            f"fuera del periodo del evento."
-        )
+        """Delega en la funcion de modulo, compartida con la interfaz."""
+        return describir_contraste_de_fechas(gasto, veredicto)
 
     def _formatear_importe(self, importe: float, moneda: str) -> str:
         """Delega en la funcion de modulo, compartida con el resto."""

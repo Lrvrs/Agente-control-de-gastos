@@ -337,6 +337,34 @@ class GestorEstilos:
             height: 1px; background: #EDF1F7; margin: 2px 0 6px 0;
         }}
 
+        /* ---------- Pantalla de resolucion ---------- */
+
+        /* Bloque principal con el razonamiento. Tipografia de lectura y
+           tamano algo mayor de lo habitual: es el texto que el alumno debe
+           leer con atencion y compara con su propia decision. */
+        .resolucion-texto {{
+            background: #FBFCFE; border: 1px solid {Paleta.BORDE};
+            border-left: 3px solid {Paleta.AZUL};
+            border-radius: 10px; padding: 18px 20px; margin: 4px 0 16px 0;
+            font-size: 14.5px; line-height: 1.75; color: {Paleta.TEXTO};
+        }}
+
+        /* Frase del contraste de fechas, destacada dentro del razonamiento
+           porque suele ser el dato que decide la resolucion. */
+        .resolucion-fechas {{
+            display: block; margin-top: 12px; padding-top: 12px;
+            border-top: 1px dashed {Paleta.BORDE};
+            font-weight: 600;
+        }}
+
+        /* Fila con el veredicto del agente y la decision del alumno,
+           enfrentados para que la comparacion sea inmediata. */
+        .resolucion-cara {{
+            display: flex; gap: 10px; align-items: center;
+            font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase;
+            color: {Paleta.ETIQUETA}; font-weight: 700; margin-bottom: 4px;
+        }}
+
         /* ---------- Animaciones de entrada ---------- */
 
         /* Entrada de la ventana emergente: aparece desde abajo, con un ligero

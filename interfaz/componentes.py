@@ -7,7 +7,7 @@ from typing import List
 
 import streamlit as st
 
-from dominio.correo import CorreoSimulado
+from dominio.correo import CorreoSimulado, describir_contraste_de_fechas
 from dominio.gasto import ConjuntoGastos
 from dominio.veredicto import ResultadoEvaluacion, TipoVeredicto
 from interfaz.estilos import Paleta
@@ -306,5 +306,62 @@ class Componentes:
         # El cuerpo se escapa entero y se respeta su formato con white-space.
         st.markdown(
             f'<div class="correo-cuerpo">{escape(correo.cuerpo)}</div>',
+            unsafe_allow_html=True,
+        )
+
+    @staticmethod
+    def pantalla_resolucion(gasto, veredicto, decision: str) -> None:
+        """
+        Pinta el razonamiento del agente sobre un gasto y la decision tomada.
+
+        Enfrenta ambas resoluciones en la cabecera, sin calificar la diferencia.
+        La comparacion se muestra; el juicio sobre ella lo hace el alumno, que
+        es justamente el ejercicio.
+        """
+        # Cabecera con las dos resoluciones enfrentadas.
+        color_agente = Componentes.COLOR_POR_VEREDICTO[veredicto.tipo]
+        cabecera = (
+            f'<div class="resolucion-cara">El agente resolvió'
+            f'  <span class="distintivo" '
+            f'        style="background:{color_agente}1A;color:{color_agente}">'
+            f'  {escape(veredicto.tipo.value)}</span>'
+        )
+
+        if decision:
+            color_alumno = Paleta.VERDE if decision == "APROBADO" else Paleta.ROJO
+            cabecera += (
+                f'  · tú has decidido'
+                f'  <span class="distintivo" '
+                f'        style="background:{color_alumno}1A;color:{color_alumno}">'
+                f'  {escape(decision)}</span>'
+            )
+
+        cabecera += "</div>"
+        st.markdown(cabecera, unsafe_allow_html=True)
+
+        # Razonamiento. El contraste de fechas, cuando existe, se separa del
+        # resto porque suele ser el dato que decide la resolucion.
+        contraste = describir_contraste_de_fechas(gasto, veredicto)
+        bloque = escape(veredicto.motivo)
+        if contraste:
+            bloque += f'<span class="resolucion-fechas">{escape(contraste)}</span>'
+
+        st.markdown(
+            f'<div class="resolucion-texto">{bloque}</div>',
+            unsafe_allow_html=True,
+        )
+
+        # Ficha del apunte y de la clausula aplicada, para poder comprobarlo.
+        justificante = "Sí" if gasto.tiene_justificante else "No"
+        st.markdown(
+            f'<div class="etiqueta-seccion">El apunte</div>'
+            f'<div class="celda-meta" style="line-height:1.9">'
+            f'{escape(gasto.descripcion)}<br>'
+            f'{escape(gasto.categoria)} · {escape(gasto.ciudad)} · '
+            f'{escape(gasto.fecha)} · {escape(gasto.empleado)}<br>'
+            f'{gasto.importe:.2f} {escape(gasto.moneda)} · '
+            f'justificante: {justificante} · '
+            f'cláusula aplicada: {escape(veredicto.clausula)}'
+            f'</div>',
             unsafe_allow_html=True,
         )

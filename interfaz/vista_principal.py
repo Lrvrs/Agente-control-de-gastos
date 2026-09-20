@@ -8,7 +8,7 @@ import streamlit as st
 from aplicacion.control_uso import ControlUso
 from aplicacion.redactor_cuerpo_correo import GeneradorCuerpoCorreo
 from aplicacion.servicio_evaluacion import ServicioEvaluacion
-from dominio.correo import RedactorCorreo
+from dominio.correo import RedactorCorreo, describir_contraste_de_fechas
 from dominio.gasto import ConjuntoGastos
 from dominio.politica import Politica
 from dominio.veredicto import (
@@ -56,6 +56,7 @@ class VistaPrincipal:
     CLAVE_DECISIONES = "decisiones_alumno"
     CLAVE_TRAZA = "traza_verificacion"
     CLAVE_BIENVENIDA_CERRADA = "bienvenida_cerrada"
+    CLAVE_RESOLUCION_ABIERTA = "resolucion_abierta"
 
     def __init__(self) -> None:
         """Construye las dependencias de la vista una sola vez por ejecucion."""
@@ -199,6 +200,9 @@ class VistaPrincipal:
         # pagina volvera a verla, que es el comportamiento correcto en un
         # aula: cada alumno la ve al entrar y nadie la ve repetida.
         st.session_state.setdefault(self.CLAVE_BIENVENIDA_CERRADA, False)
+
+        # Gasto cuya resolucion se esta consultando, o None.
+        st.session_state.setdefault(self.CLAVE_RESOLUCION_ABIERTA, None)
 
     def _mostrar_bienvenida(self) -> None:
         """
@@ -761,12 +765,14 @@ class VistaPrincipal:
                 enviado=gasto.identificador in enviados,
             )
 
-        self._renderizar_balance(gastos, resultado)
-
         # Si hay un correo seleccionado, se abre la ventana emergente.
         identificador = st.session_state[self.CLAVE_CORREO_ABIERTO]
         if identificador:
             self._mostrar_correo(identificador, gastos, resultado)
+
+        pendiente = st.session_state[self.CLAVE_RESOLUCION_ABIERTA]
+        if pendiente:
+            self._mostrar_resolucion(pendiente, gastos, resultado)
 
     def _renderizar_fila(self, gasto, veredicto, resaltado, decision, enviado) -> None:
         """Pinta una fila completa: datos, veredicto, decision y controles."""
@@ -781,12 +787,7 @@ class VistaPrincipal:
         with columnas[3]:
             Componentes.celda_veredicto(veredicto)
         with columnas[4]:
-            # Se considera discrepancia cuando el alumno dice algo distinto de
-            # lo que dijo el agente. Los veredictos que el agente no resuelve
-            # -PARCIAL y REVISION- no cuentan como discrepancia: ahi no propuso
-            # nada que contradecir, sino que pidio precisamente una decision.
-            discrepa = self._hay_discrepancia(veredicto, decision)
-            Componentes.celda_decision(decision, discrepa)
+            Componentes.celda_decision(decision, discrepa=False)
 
         # Los tres controles de la fila. Etiquetas de un solo caracter para que
         # quepan sin descuadrar la rejilla, con ayuda emergente que explica que
@@ -830,6 +831,379 @@ class VistaPrincipal:
             decisiones.pop(identificador, None)
         else:
             decisiones[identificador] = decision
+
+            # Al pronunciarse, se abre la resolucion del agente. El orden
+            # importa: el alumno decide primero y lee despues el razonamiento,
+            # de modo que la pantalla funciona como comprobacion de su criterio
+            # y no como una respuesta que copiar.
+            st.session_state[self.CLAVE_RESOLUCION_ABIERTA] = identificador
+
+        st.rerun()
+
+    def _obtener_generador(self) -> GeneradorCuerpoCorreo | None:
+        """Devuelve el redactor de correos, o None si no hay modelo disponible."""
+        # Sin credenciales no se puede redactar nada, pero tampoco debe fallar:
+        # el correo se compondra con las plantillas fijas.
+        if not self._configuracion.llm.esta_configurado:
+            return None
+
+        try:
+            proveedor = FabricaProveedores.crear(self._configuracion.llm)
+        except ErrorProveedorLLM:
+            return None
+
+        return VistaPrincipal._obtener_generador_compartido(
+            proveedor, self._configuracion.llm.modelo, firma_estructural()
+        )
+
+    @staticmethod
+    @st.cache_resource
+    def _obtener_generador_compartido(_proveedor, modelo: str, firma: str):
+        """Devuelve el unico generador del proceso para un modelo dado."""
+        # El proveedor lleva guion bajo para que Streamlit no intente calcular
+        # su huella, que no es serializable. El nombre del modelo si entra en la
+        # firma: al cambiarlo desde el panel de secretos se construye un
+        # generador nuevo y se descarta la cache de textos del anterior.
+        return GeneradorCuerpoCorreo(_proveedor)
+
+    def _renderizar_traza_verificacion(self) -> None:
+        """
+        Muestra que decidio comprobar el agente y que encontro.
+
+        Es el panel que convierte el uso de la herramienta en algo observable.
+        Sin el, el alumno ve aparecer un veredicto y no tiene forma de saber si
+        el sistema consulto una fuente o improviso; con el, puede leer la
+        consulta que el propio agente formulo y el dato en que se apoyo.
+        """
+        traza = st.session_state[self.CLAVE_TRAZA]
+
+        # Sin verificacion no se muestra nada: un panel vacio solo estorbaria.
+        if not traza:
+            return
+
+        with st.expander(
+            f"Qué comprobó el agente antes de decidir ({len(traza)} consultas)",
+            expanded=False,
+        ):
+            for resultado in traza:
+                st.markdown(f"**{resultado.consulta}**")
+
+                if not resultado.hay_informacion:
+                    # Declarar el hueco es informacion valiosa: explica por que
+                    # un gasto acabo en revision.
+                    st.caption("Sin información disponible.")
+                    continue
+
+                if resultado.resumen:
+                    st.write(resultado.resumen)
+
+                if resultado.fuentes:
+                    st.caption("Fuentes: " + " · ".join(resultado.fuentes))
+
+    # Proporciones de las columnas de cada fila. Se declaran una sola vez
+    # para que la cabecera y las filas de datos queden siempre alineadas.
+    PROPORCIONES_FILA = [0.7, 3.3, 1.1, 1.4, 1.5, 0.55, 0.55, 0.55]
+
+    def _renderizar_lista_interactiva(self, gastos, resultado, cambiados) -> None:
+        """
+        Pinta la lista de gastos con los controles de revision de cada uno.
+
+        Sustituye a la tabla estatica anterior. El motivo es funcional: no hay
+        forma de intercalar botones dentro de una tabla HTML en Streamlit, y el
+        ejercicio necesita que el alumno pueda pronunciarse sobre cada gasto sin
+        salir de la fila que esta leyendo. Se construye por tanto sobre una
+        rejilla de columnas, conservando el aspecto anterior mediante estilos.
+        """
+        st.caption(
+            "El agente ya ha decidido. Tu trabajo es revisarlo: confirma con "
+            "**✓** o corrige con **✗**. Con **✉** ves el correo que se enviaría."
+        )
+
+        cambiados_conjunto = set(cambiados)
+        decisiones = st.session_state[self.CLAVE_DECISIONES]
+        enviados = st.session_state[self.CLAVE_CORREOS_ENVIADOS]
+
+        Componentes.cabecera_lista(st.columns(self.PROPORCIONES_FILA))
+        Componentes.separador()
+
+        for gasto in gastos:
+            veredicto = resultado.obtener(gasto.identificador)
+
+            # No deberia ocurrir, porque el analizador rellena los ausentes,
+            # pero una fila sin veredicto se omite antes que romper la pantalla.
+            if veredicto is None:
+                continue
+
+            self._renderizar_fila(
+                gasto, veredicto,
+                resaltado=gasto.identificador in cambiados_conjunto,
+                decision=decisiones.get(gasto.identificador, ""),
+                enviado=gasto.identificador in enviados,
+            )
+
+        # Si hay un correo seleccionado, se abre la ventana emergente.
+        identificador = st.session_state[self.CLAVE_CORREO_ABIERTO]
+        if identificador:
+            self._mostrar_correo(identificador, gastos, resultado)
+
+        pendiente = st.session_state[self.CLAVE_RESOLUCION_ABIERTA]
+        if pendiente:
+            self._mostrar_resolucion(pendiente, gastos, resultado)
+
+    def _renderizar_fila(self, gasto, veredicto, resaltado, decision, enviado) -> None:
+        """Pinta una fila completa: datos, veredicto, decision y controles."""
+        columnas = st.columns(self.PROPORCIONES_FILA)
+
+        with columnas[0]:
+            Componentes.celda_identificador(gasto.identificador, resaltado)
+        with columnas[1]:
+            Componentes.celda_concepto(gasto)
+        with columnas[2]:
+            Componentes.celda_importe(gasto)
+        with columnas[3]:
+            Componentes.celda_veredicto(veredicto)
+        with columnas[4]:
+            Componentes.celda_decision(decision, discrepa=False)
+
+        # Los tres controles de la fila. Etiquetas de un solo caracter para que
+        # quepan sin descuadrar la rejilla, con ayuda emergente que explica que
+        # hace cada uno, porque un icono suelto no es autoexplicativo.
+        with columnas[5]:
+            if st.button(
+                "✓", key=f"ap_{gasto.identificador}",
+                help="Aprobar este gasto",
+                use_container_width=True,
+            ):
+                self._registrar_decision(gasto.identificador, "APROBADO")
+
+        with columnas[6]:
+            if st.button(
+                "✗", key=f"de_{gasto.identificador}",
+                help="Denegar este gasto",
+                use_container_width=True,
+            ):
+                self._registrar_decision(gasto.identificador, "DENEGADO")
+
+        with columnas[7]:
+            # El sobre cambia cuando el correo ya se autorizo, para que el
+            # estado sea visible sin abrir la ventana.
+            if st.button(
+                "✓✉" if enviado else "✉",
+                key=f"co_{gasto.identificador}",
+                help="Ver el correo que enviaría el agente",
+                use_container_width=True,
+            ):
+                st.session_state[self.CLAVE_CORREO_ABIERTO] = gasto.identificador
+                st.rerun()
+
+        Componentes.separador()
+
+    def _registrar_decision(self, identificador: str, decision: str) -> None:
+        """Guarda la decision del alumno sobre un gasto y repinta la pantalla."""
+        # Pulsar de nuevo el mismo boton retira la decision. Permite corregirse
+        # sin tener que recargar la pagina y perder todo lo demas.
+        decisiones = st.session_state[self.CLAVE_DECISIONES]
+        if decisiones.get(identificador) == decision:
+            decisiones.pop(identificador, None)
+        else:
+            decisiones[identificador] = decision
+
+            # Al pronunciarse, se abre la resolucion del agente. El orden
+            # importa: el alumno decide primero y lee despues el razonamiento,
+            # de modo que la pantalla funciona como comprobacion de su criterio
+            # y no como una respuesta que copiar.
+            st.session_state[self.CLAVE_RESOLUCION_ABIERTA] = identificador
+
+        st.rerun()
+
+    def _hay_discrepancia(self, veredicto, decision: str) -> bool:
+        """Indica si la decision del alumno contradice al agente."""
+        # Sin decision no hay nada que comparar.
+        if not decision:
+            return False
+
+        # PARCIAL y REVISION no son propuestas cerradas: el agente esta
+        # pidiendo que decida una persona, asi que lo que el alumno resuelva
+        # ahi no contradice nada.
+        if veredicto.requiere_persona:
+            return False
+
+        return veredicto.tipo.value != decision
+
+    def _obtener_generador(self) -> GeneradorCuerpoCorreo | None:
+        """Devuelve el redactor de correos, o None si no hay modelo disponible."""
+        # Sin credenciales no se puede redactar nada, pero tampoco debe fallar:
+        # el correo se compondra con las plantillas fijas.
+        if not self._configuracion.llm.esta_configurado:
+            return None
+
+        try:
+            proveedor = FabricaProveedores.crear(self._configuracion.llm)
+        except ErrorProveedorLLM:
+            return None
+
+        return VistaPrincipal._obtener_generador_compartido(
+            proveedor, self._configuracion.llm.modelo, firma_estructural()
+        )
+
+    @staticmethod
+    @st.cache_resource
+    def _obtener_generador_compartido(_proveedor, modelo: str, firma: str):
+        """Devuelve el unico generador del proceso para un modelo dado."""
+        # El proveedor lleva guion bajo para que Streamlit no intente calcular
+        # su huella, que no es serializable. El nombre del modelo si entra en la
+        # firma: al cambiarlo desde el panel de secretos se construye un
+        # generador nuevo y se descarta la cache de textos del anterior.
+        return GeneradorCuerpoCorreo(_proveedor)
+
+    def _renderizar_traza_verificacion(self) -> None:
+        """
+        Muestra que decidio comprobar el agente y que encontro.
+
+        Es el panel que convierte el uso de la herramienta en algo observable.
+        Sin el, el alumno ve aparecer un veredicto y no tiene forma de saber si
+        el sistema consulto una fuente o improviso; con el, puede leer la
+        consulta que el propio agente formulo y el dato en que se apoyo.
+        """
+        traza = st.session_state[self.CLAVE_TRAZA]
+
+        # Sin verificacion no se muestra nada: un panel vacio solo estorbaria.
+        if not traza:
+            return
+
+        with st.expander(
+            f"Qué comprobó el agente antes de decidir ({len(traza)} consultas)",
+            expanded=False,
+        ):
+            for resultado in traza:
+                st.markdown(f"**{resultado.consulta}**")
+
+                if not resultado.hay_informacion:
+                    # Declarar el hueco es informacion valiosa: explica por que
+                    # un gasto acabo en revision.
+                    st.caption("Sin información disponible.")
+                    continue
+
+                if resultado.resumen:
+                    st.write(resultado.resumen)
+
+                if resultado.fuentes:
+                    st.caption("Fuentes: " + " · ".join(resultado.fuentes))
+
+    # Proporciones de las columnas de cada fila. Se declaran una sola vez
+    # para que la cabecera y las filas de datos queden siempre alineadas.
+    PROPORCIONES_FILA = [0.7, 3.3, 1.1, 1.4, 1.5, 0.55, 0.55, 0.55]
+
+    def _renderizar_lista_interactiva(self, gastos, resultado, cambiados) -> None:
+        """
+        Pinta la lista de gastos con los controles de revision de cada uno.
+
+        Sustituye a la tabla estatica anterior. El motivo es funcional: no hay
+        forma de intercalar botones dentro de una tabla HTML en Streamlit, y el
+        ejercicio necesita que el alumno pueda pronunciarse sobre cada gasto sin
+        salir de la fila que esta leyendo. Se construye por tanto sobre una
+        rejilla de columnas, conservando el aspecto anterior mediante estilos.
+        """
+        st.caption(
+            "El agente ya ha decidido. Tu trabajo es revisarlo: confirma con "
+            "**✓** o corrige con **✗**. Con **✉** ves el correo que se enviaría."
+        )
+
+        cambiados_conjunto = set(cambiados)
+        decisiones = st.session_state[self.CLAVE_DECISIONES]
+        enviados = st.session_state[self.CLAVE_CORREOS_ENVIADOS]
+
+        Componentes.cabecera_lista(st.columns(self.PROPORCIONES_FILA))
+        Componentes.separador()
+
+        for gasto in gastos:
+            veredicto = resultado.obtener(gasto.identificador)
+
+            # No deberia ocurrir, porque el analizador rellena los ausentes,
+            # pero una fila sin veredicto se omite antes que romper la pantalla.
+            if veredicto is None:
+                continue
+
+            self._renderizar_fila(
+                gasto, veredicto,
+                resaltado=gasto.identificador in cambiados_conjunto,
+                decision=decisiones.get(gasto.identificador, ""),
+                enviado=gasto.identificador in enviados,
+            )
+
+        # Si hay un correo seleccionado, se abre la ventana emergente.
+        identificador = st.session_state[self.CLAVE_CORREO_ABIERTO]
+        if identificador:
+            self._mostrar_correo(identificador, gastos, resultado)
+
+        pendiente = st.session_state[self.CLAVE_RESOLUCION_ABIERTA]
+        if pendiente:
+            self._mostrar_resolucion(pendiente, gastos, resultado)
+
+    def _renderizar_fila(self, gasto, veredicto, resaltado, decision, enviado) -> None:
+        """Pinta una fila completa: datos, veredicto, decision y controles."""
+        columnas = st.columns(self.PROPORCIONES_FILA)
+
+        with columnas[0]:
+            Componentes.celda_identificador(gasto.identificador, resaltado)
+        with columnas[1]:
+            Componentes.celda_concepto(gasto)
+        with columnas[2]:
+            Componentes.celda_importe(gasto)
+        with columnas[3]:
+            Componentes.celda_veredicto(veredicto)
+        with columnas[4]:
+            Componentes.celda_decision(decision, discrepa=False)
+
+        # Los tres controles de la fila. Etiquetas de un solo caracter para que
+        # quepan sin descuadrar la rejilla, con ayuda emergente que explica que
+        # hace cada uno, porque un icono suelto no es autoexplicativo.
+        with columnas[5]:
+            if st.button(
+                "✓", key=f"ap_{gasto.identificador}",
+                help="Aprobar este gasto",
+                use_container_width=True,
+            ):
+                self._registrar_decision(gasto.identificador, "APROBADO")
+
+        with columnas[6]:
+            if st.button(
+                "✗", key=f"de_{gasto.identificador}",
+                help="Denegar este gasto",
+                use_container_width=True,
+            ):
+                self._registrar_decision(gasto.identificador, "DENEGADO")
+
+        with columnas[7]:
+            # El sobre cambia cuando el correo ya se autorizo, para que el
+            # estado sea visible sin abrir la ventana.
+            if st.button(
+                "✓✉" if enviado else "✉",
+                key=f"co_{gasto.identificador}",
+                help="Ver el correo que enviaría el agente",
+                use_container_width=True,
+            ):
+                st.session_state[self.CLAVE_CORREO_ABIERTO] = gasto.identificador
+                st.rerun()
+
+        Componentes.separador()
+
+    def _registrar_decision(self, identificador: str, decision: str) -> None:
+        """Guarda la decision del alumno sobre un gasto y repinta la pantalla."""
+        # Pulsar de nuevo el mismo boton retira la decision. Permite corregirse
+        # sin tener que recargar la pagina y perder todo lo demas.
+        decisiones = st.session_state[self.CLAVE_DECISIONES]
+        if decisiones.get(identificador) == decision:
+            decisiones.pop(identificador, None)
+        else:
+            decisiones[identificador] = decision
+
+            # Al pronunciarse, se abre la resolucion del agente. El orden
+            # importa: el alumno decide primero y lee despues el razonamiento,
+            # de modo que la pantalla funciona como comprobacion de su criterio
+            # y no como una respuesta que copiar.
+            st.session_state[self.CLAVE_RESOLUCION_ABIERTA] = identificador
+
         st.rerun()
 
     def _hay_discrepancia(self, veredicto, decision: str) -> bool:
@@ -887,15 +1261,50 @@ class VistaPrincipal:
                 "Sin revisar", str(pendientes), "", Paleta.ETIQUETA
             )
 
+    def _mostrar_resolucion(self, identificador, gastos, resultado) -> None:
+        """
+        Muestra el razonamiento del agente sobre un gasto concreto.
+
+        Se abre cuando el alumno se pronuncia, no antes. Esa secuencia -decidir
+        primero, leer despues- convierte la pantalla en una comprobacion del
+        propio criterio en lugar de en una respuesta que copiar, que es lo que
+        ocurriria si el razonamiento estuviera visible de antemano.
+        """
+        # La seleccion se consume al abrir, por el mismo motivo que en la
+        # ventana del correo: si quedara puesta, se reabriria sola.
+        st.session_state[self.CLAVE_RESOLUCION_ABIERTA] = None
+
+        gasto = gastos.buscar(identificador)
+        veredicto = resultado.obtener(identificador)
+        if gasto is None or veredicto is None:
+            return
+
+        decision = st.session_state[self.CLAVE_DECISIONES].get(identificador, "")
+
+        @st.dialog(f"Resolución del agente · {gasto.identificador}", width="large")
+        def ventana() -> None:
+            """Contenido de la pantalla de resolucion."""
+            Componentes.pantalla_resolucion(gasto, veredicto, decision)
+
+            if st.button("Cerrar", type="primary", use_container_width=True):
+                st.rerun()
+
+        ventana()
+
     def _mostrar_correo(self, identificador, gastos, resultado) -> None:
         """Abre la ventana emergente con el correo del gasto indicado."""
         gasto = gastos.buscar(identificador)
         veredicto = resultado.obtener(identificador)
 
+        # La seleccion se consume aqui, antes de abrir nada. Si se dejara
+        # puesta, cualquier reejecutado posterior de la pantalla -pulsar
+        # aprobar, por ejemplo- volveria a abrir la ventana, que es lo que
+        # ocurria al cerrarla con la aspa del marco en lugar del boton.
+        st.session_state[self.CLAVE_CORREO_ABIERTO] = None
+
         # Si el gasto o su veredicto ya no existen -por ejemplo porque el
-        # alumno ha subido otro fichero- se descarta la seleccion en silencio.
+        # alumno ha subido otro fichero- no hay nada que mostrar.
         if gasto is None or veredicto is None:
-            st.session_state[self.CLAVE_CORREO_ABIERTO] = None
             return
 
         # El cuerpo lo redacta el modelo, no una plantilla. Se genera al abrir
@@ -939,7 +1348,6 @@ class VistaPrincipal:
                         key=f"enviar_{gasto.identificador}",
                     ):
                         enviados.append(gasto.identificador)
-                        st.session_state[self.CLAVE_CORREO_ABIERTO] = None
                         st.rerun()
                 else:
                     st.caption("Este correo ya fue autorizado.")
@@ -952,7 +1360,6 @@ class VistaPrincipal:
                     use_container_width=True,
                     key=f"cerrar_{gasto.identificador}",
                 ):
-                    st.session_state[self.CLAVE_CORREO_ABIERTO] = None
                     st.rerun()
 
         ventana()

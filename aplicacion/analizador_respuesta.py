@@ -112,11 +112,20 @@ class AnalizadorRespuesta:
         clausula = str(elemento.get("clausula", "")).strip() or "sin indicar"
         motivo = str(elemento.get("motivo", "")).strip()[:240]
 
+        # Datos del evento verificado. Son opcionales: solo los devuelve el
+        # modelo cuando el gasto invoca uno y ha conseguido comprobarlo.
+        evento = str(elemento.get("evento", "")).strip()[:120]
+        desde = str(elemento.get("evento_desde", "")).strip()[:20]
+        hasta = str(elemento.get("evento_hasta", "")).strip()[:20]
+
         return Veredicto(
             identificador_gasto=identificador,
             tipo=tipo,
             clausula=clausula,
             motivo=motivo or "El modelo no aportó motivo.",
+            evento=evento,
+            evento_desde=desde,
+            evento_hasta=hasta,
         )
 
     def _completar_ausentes(

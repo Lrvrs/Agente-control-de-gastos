@@ -61,6 +61,28 @@ class Veredicto:
     # Explicacion breve en lenguaje natural, de una o dos frases.
     motivo: str
 
+    # Datos del evento invocado por el gasto, cuando lo hay y el agente ha
+    # conseguido verificarlo. Se recogen como campos separados y no dentro del
+    # motivo por una razon concreta: la discrepancia entre la fecha del apunte y
+    # el periodo del evento es el nucleo de la resolucion en estos casos, y
+    # dejarla dentro de una frase libre significaria que su redaccion depende de
+    # lo que el modelo decida escribir cada vez. Con los datos separados, la
+    # aplicacion compone siempre la misma frase con el mismo rigor.
+    evento: str = ""
+    evento_desde: str = ""
+    evento_hasta: str = ""
+
+    @property
+    def tiene_periodo_de_evento(self) -> bool:
+        """Indica si consta el evento invocado y sus fechas de celebracion."""
+        # Hacen falta las tres piezas: sin el nombre no se puede nombrar y sin
+        # ambas fechas no se puede describir el periodo.
+        return bool(
+            self.evento.strip()
+            and self.evento_desde.strip()
+            and self.evento_hasta.strip()
+        )
+
     @property
     def es_favorable(self) -> bool:
         """Indica si el gasto sale adelante sin objeciones."""

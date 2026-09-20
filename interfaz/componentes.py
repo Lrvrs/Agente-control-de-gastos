@@ -237,9 +237,9 @@ class Componentes:
         # y hecho consumado sea inmediata.
         if enviado:
             st.markdown(
-                '<div class="correo-enviado">ENVIADO (simulación) · '
-                'El agente ha ejecutado la acción con tu autorización. '
-                'Ningún mensaje ha salido de la aplicación.</div>',
+                '<div class="correo-enviado">YA AUTORIZADO · '
+                'Este mensaje se envió en esta sesión. Ningún correo sale '
+                'realmente de la aplicación.</div>',
                 unsafe_allow_html=True,
             )
         else:

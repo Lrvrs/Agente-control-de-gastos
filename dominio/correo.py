@@ -7,6 +7,43 @@ from dominio.gasto import Gasto
 from dominio.veredicto import TipoVeredicto, Veredicto
 
 
+# Nombres de los meses. Se declaran aqui y no se recurre a la localizacion del
+# sistema porque el servidor donde corre la aplicacion no tiene por que tener el
+# idioma espanol instalado, y lo habitual es que no lo tenga.
+MESES = (
+    "enero", "febrero", "marzo", "abril", "mayo", "junio",
+    "julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre",
+)
+
+
+def formatear_fecha(fecha_iso: str) -> str:
+    """Convierte una fecha ISO en su forma escrita en castellano."""
+    # Se admite cualquier texto: si no tiene el formato esperado se devuelve tal
+    # cual, que es preferible a perder el dato.
+    partes = fecha_iso.strip().split("-")
+    if len(partes) != 3:
+        return fecha_iso.strip()
+
+    try:
+        anio, mes, dia = int(partes[0]), int(partes[1]), int(partes[2])
+    except ValueError:
+        return fecha_iso.strip()
+
+    if not 1 <= mes <= 12:
+        return fecha_iso.strip()
+
+    return f"{dia} de {MESES[mes - 1]} de {anio}"
+
+
+def formatear_importe(importe: float, moneda: str) -> str:
+    """Devuelve el importe con el formato numerico espanol."""
+    # Python formatea a la inglesa, asi que se intercambian los separadores
+    # usando una marca intermedia para no pisar el resultado a mitad.
+    ingles = f"{importe:,.2f}"
+    espanol = ingles.replace(",", "\x00").replace(".", ",").replace("\x00", ".")
+    return f"{espanol} {moneda}"
+
+
 @dataclass(frozen=True)
 class CorreoSimulado:
     """
@@ -118,8 +155,20 @@ class RedactorCorreo:
         ),
     }
 
-    def redactar(self, gasto: Gasto, veredicto: Veredicto) -> CorreoSimulado:
-        """Compone el correo que corresponde a este gasto y este veredicto."""
+    def redactar(
+        self,
+        gasto: Gasto,
+        veredicto: Veredicto,
+        explicacion: str = "",
+    ) -> CorreoSimulado:
+        """
+        Compone el correo que corresponde a este gasto y este veredicto.
+
+        Cuando se recibe una explicacion ya redactada -normalmente la que ha
+        escrito el modelo- se utiliza en lugar de las plantillas fijas. El resto
+        del mensaje, que es lo que debe ser exacto y uniforme, lo sigue
+        componiendo esta clase: el saludo, la firma y la ficha del pie.
+        """
         # El destinatario depende del desenlace: lo que el agente resuelve por
         # si solo se comunica al empleado; lo que no sabe resolver se escala.
         # Esa bifurcacion es la segunda decision del agente, ademas del propio
@@ -148,11 +197,29 @@ class RedactorCorreo:
             destinatario_direccion=destinatario_direccion,
             copia_direccion=copia,
             asunto=asunto,
-            cuerpo=self._componer_cuerpo(gasto, veredicto, destinatario_nombre),
+            cuerpo=self._componer_cuerpo(
+                gasto, veredicto, destinatario_nombre, explicacion
+            ),
         )
 
+    def nombre_destinatario(self, gasto: Gasto, veredicto: Veredicto) -> str:
+        """
+        Devuelve a quien se dirige el correo de este veredicto.
+
+        Se expone como metodo publico porque quien redacta el cuerpo necesita
+        saberlo: no se escribe igual a quien presento el gasto que al
+        responsable al que se eleva para que decida.
+        """
+        if veredicto.tipo is TipoVeredicto.REVISION:
+            return self.RESPONSABLE_NOMBRE
+        return gasto.empleado
+
     def _componer_cuerpo(
-        self, gasto: Gasto, veredicto: Veredicto, destinatario: str
+        self,
+        gasto: Gasto,
+        veredicto: Veredicto,
+        destinatario: str,
+        explicacion: str = "",
     ) -> str:
         """
         Redacta el cuerpo del mensaje.
@@ -173,12 +240,23 @@ class RedactorCorreo:
         # corresponde a una comunicacion con efectos economicos.
         nombre_pila = destinatario.split()[0] if destinatario else "Hola"
 
+        # Si el modelo ha redactado la explicacion, se usa tal cual: ya
+        # contiene los dos parrafos, el del razonamiento y el de la peticion.
+        # Si no, se recurre a las plantillas fijas, que garantizan que siempre
+        # haya un correo aunque el servicio no responda.
+        if explicacion.strip():
+            bloque_explicacion = [explicacion.strip()]
+        else:
+            bloque_explicacion = [
+                self._componer_explicacion(gasto, veredicto),
+                "",
+                self.PETICIONES[veredicto.tipo],
+            ]
+
         partes: List[str] = [
             f"Estimado/a {nombre_pila}:",
             "",
-            self._componer_explicacion(gasto, veredicto),
-            "",
-            self.PETICIONES[veredicto.tipo],
+            *bloque_explicacion,
             "",
             "Un saludo,",
             self.CONTROLLER_NOMBRE,
@@ -222,6 +300,14 @@ class RedactorCorreo:
         if not motivo:
             motivo = "No consta el detalle de la revisión."
 
+        # El contraste de fechas, cuando existe, va como frase independiente y
+        # despues del motivo: primero se dice que ha ocurrido y luego se aporta
+        # el dato que lo sostiene.
+        contraste = self._componer_contraste_de_fechas(gasto, veredicto)
+
+        if contraste:
+            return f"{apertura} {motivo} {contraste}"
+
         return f"{apertura} {motivo}"
 
     def _componer_ficha(self, gasto: Gasto, veredicto: Veredicto) -> str:
@@ -241,7 +327,7 @@ class RedactorCorreo:
         if not clausula or clausula.lower() in ("sin indicar", "-", "none"):
             clausula = "no identificada"
 
-        return (
+        ficha = (
             f"Referencia:    {gasto.identificador}\n"
             f"Empleado:      {gasto.empleado}\n"
             f"Fecha:         {gasto.fecha}\n"
@@ -254,13 +340,69 @@ class RedactorCorreo:
             f"Cláusula:      {clausula}"
         )
 
+        # Si consta un evento verificado se anade al final de la ficha, con su
+        # periodo completo, para dejar constancia de sobre que dato externo se
+        # apoyo la resolucion.
+        if veredicto.tiene_periodo_de_evento:
+            desde = self._formatear_fecha(veredicto.evento_desde)
+            hasta = self._formatear_fecha(veredicto.evento_hasta)
+            ficha += (
+                f"\nEvento:        {veredicto.evento.strip()}"
+                f"\nCelebración:   del {desde} al {hasta}"
+            )
+
+        return ficha
+
+    def _formatear_fecha(self, fecha_iso: str) -> str:
+        """Delega en la funcion de modulo, compartida con el resto."""
+        return formatear_fecha(fecha_iso)
+
+    def _componer_contraste_de_fechas(
+        self, gasto: Gasto, veredicto: Veredicto
+    ) -> str:
+        """
+        Redacta la frase que confronta la fecha del gasto con la del evento.
+
+        Es el dato decisivo en estos casos y por eso lo compone la aplicacion a
+        partir de campos, en lugar de confiarlo a la redaccion del modelo. Asi
+        la frase sale siempre igual, con las dos fechas completas y sin
+        ambiguedad, y quien la lee puede comprobarla sin abrir nada mas.
+
+        Devuelve cadena vacia cuando no consta el periodo del evento, porque en
+        ese caso no hay nada que contrastar.
+        """
+        if not veredicto.tiene_periodo_de_evento:
+            return ""
+
+        fecha_gasto = self._formatear_fecha(gasto.fecha)
+        desde = self._formatear_fecha(veredicto.evento_desde)
+        hasta = self._formatear_fecha(veredicto.evento_hasta)
+        evento = veredicto.evento.strip()
+
+        # Se distingue si la fecha encaja o no, porque la conjuncion cambia el
+        # sentido de la frase: una confirma y la otra senala la discrepancia.
+        dentro = (
+            veredicto.evento_desde.strip()
+            <= gasto.fecha.strip()
+            <= veredicto.evento_hasta.strip()
+        )
+
+        if dentro:
+            return (
+                f"El gasto es del {fecha_gasto} y {evento} se celebró del "
+                f"{desde} al {hasta}, de modo que la estancia queda dentro "
+                f"del periodo del evento."
+            )
+
+        return (
+            f"El gasto es del {fecha_gasto}, mientras que {evento} se celebró "
+            f"del {desde} al {hasta}. La fecha del apunte queda por tanto "
+            f"fuera del periodo del evento."
+        )
+
     def _formatear_importe(self, importe: float, moneda: str) -> str:
-        """Devuelve el importe con el formato numerico espanol."""
-        # Python formatea a la inglesa, asi que se intercambian los separadores
-        # usando una marca intermedia para no pisar el resultado a mitad.
-        ingles = f"{importe:,.2f}"
-        espanol = ingles.replace(",", "\x00").replace(".", ",").replace("\x00", ".")
-        return f"{espanol} {moneda}"
+        """Delega en la funcion de modulo, compartida con el resto."""
+        return formatear_importe(importe, moneda)
 
     def _direccion_de(self, nombre: str) -> str:
         """Construye la direccion de correo a partir del nombre del empleado."""

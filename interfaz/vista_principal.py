@@ -3,6 +3,7 @@
 import streamlit as st
 
 from aplicacion.control_uso import ControlUso
+from aplicacion.redactor_cuerpo_correo import GeneradorCuerpoCorreo
 from aplicacion.servicio_evaluacion import ServicioEvaluacion
 from dominio.correo import RedactorCorreo
 from dominio.gasto import ConjuntoGastos
@@ -512,6 +513,32 @@ class VistaPrincipal:
             return subidos
         return self._repositorio.cargar_gastos()
 
+    def _obtener_generador(self) -> GeneradorCuerpoCorreo | None:
+        """Devuelve el redactor de correos, o None si no hay modelo disponible."""
+        # Sin credenciales no se puede redactar nada, pero tampoco debe fallar:
+        # el correo se compondra con las plantillas fijas.
+        if not self._configuracion.llm.esta_configurado:
+            return None
+
+        try:
+            proveedor = FabricaProveedores.crear(self._configuracion.llm)
+        except ErrorProveedorLLM:
+            return None
+
+        return VistaPrincipal._obtener_generador_compartido(
+            proveedor, self._configuracion.llm.modelo
+        )
+
+    @staticmethod
+    @st.cache_resource
+    def _obtener_generador_compartido(_proveedor, modelo: str):
+        """Devuelve el unico generador del proceso para un modelo dado."""
+        # El proveedor lleva guion bajo para que Streamlit no intente calcular
+        # su huella, que no es serializable. El nombre del modelo si entra en la
+        # firma: al cambiarlo desde el panel de secretos se construye un
+        # generador nuevo y se descarta la cache de textos del anterior.
+        return GeneradorCuerpoCorreo(_proveedor)
+
     def _renderizar_traza_verificacion(self) -> None:
         """
         Muestra que decidio comprobar el agente y que encontro.
@@ -724,7 +751,21 @@ class VistaPrincipal:
             st.session_state[self.CLAVE_CORREO_ABIERTO] = None
             return
 
-        correo = RedactorCorreo().redactar(gasto, veredicto)
+        # El cuerpo lo redacta el modelo, no una plantilla. Se genera al abrir
+        # el correo y no al evaluar: una evaluacion de diez gastos no dispara
+        # diez llamadas, y las que se produzcan se reparten solas conforme el
+        # alumno va abriendo mensajes. Si el servicio no responde, se devuelve
+        # cadena vacia y el redactor recurre a la plantilla fija.
+        redactor = RedactorCorreo()
+        destinatario = redactor.nombre_destinatario(gasto, veredicto)
+
+        explicacion = ""
+        generador = self._obtener_generador()
+        if generador is not None:
+            with st.spinner("Redactando el correo..."):
+                explicacion = generador.generar(gasto, veredicto, destinatario)
+
+        correo = redactor.redactar(gasto, veredicto, explicacion)
 
         # st.dialog necesita envolver una funcion; se define aqui dentro para
         # que capture el correo ya redactado sin pasarlo por el estado.
@@ -739,9 +780,10 @@ class VistaPrincipal:
             columna_izquierda, columna_derecha = st.columns(2)
 
             with columna_izquierda:
-                # El boton de envio desaparece una vez usado. Es deliberado:
-                # en la vida real un correo no se puede desenviar, y que el
-                # boton no vuelva a ofrecerse traslada esa irreversibilidad.
+                # Enviar cierra la ventana. Es lo que hace un cliente de correo
+                # y lo que el gesto significa: una vez autorizado el envio, ya
+                # no hay nada que revisar en esa pantalla. El acuse queda en la
+                # lista, donde la referencia aparece marcada.
                 if not ya_enviado:
                     if st.button(
                         "Enviar correo",
@@ -750,6 +792,7 @@ class VistaPrincipal:
                         key=f"enviar_{gasto.identificador}",
                     ):
                         enviados.append(gasto.identificador)
+                        st.session_state[self.CLAVE_CORREO_ABIERTO] = None
                         st.rerun()
                 else:
                     st.caption("Este correo ya fue autorizado.")
@@ -758,7 +801,7 @@ class VistaPrincipal:
                 # Al cerrar hay que limpiar la seleccion; si no, la ventana se
                 # reabriria en el siguiente reejecutado del script.
                 if st.button(
-                    "Cerrar",
+                    "Cancelar",
                     use_container_width=True,
                     key=f"cerrar_{gasto.identificador}",
                 ):

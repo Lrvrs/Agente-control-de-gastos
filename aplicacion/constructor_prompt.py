@@ -49,7 +49,15 @@ disponible no permite confirmarlo, emite REVISION y di exactamente qué no \
 has podido comprobar. No supongas fechas, distancias ni la existencia de \
 ninguna empresa o evento.
 
-El campo motivo debe tener una sola frase, de menos de veinticinco palabras.
+El campo motivo se mostrará tal cual al empleado, en la primera línea del \
+correo que recibirá. Escríbelo como se lo explicarías a un compañero: una o \
+dos frases, menos de cuarenta palabras, sin jerga.
+
+Cuando deniegues o escales, el motivo debe contener la discrepancia concreta, \
+contrastando el dato del apunte con el dato verificado. No basta con decir \
+que no cumple: di qué dice el apunte y qué dice la comprobación. Por ejemplo, \
+"la factura es del 22 de septiembre y esa feria se celebró del 9 al 11 de \
+junio" en lugar de "las fechas no coinciden con el evento".
 Debes incluir un elemento por cada gasto recibido, sin omitir ninguno."""
 
     def construir_instruccion_sistema(self) -> str:

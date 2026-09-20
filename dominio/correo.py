@@ -62,8 +62,8 @@ class RedactorCorreo:
     CONTROLLER_AREA = "Control de Gestión · ACME Iberia"
 
     # Buzon del responsable, al que se escala lo que no puede resolverse solo.
-    RESPONSABLE_NOMBRE = "Responsable de departamento"
-    RESPONSABLE_DIRECCION = f"responsable.departamento@{DOMINIO}"
+    RESPONSABLE_NOMBRE = "Carlos Mena"
+    RESPONSABLE_DIRECCION = f"carlos.mena@{DOMINIO}"
 
     # Asunto segun el desenlace. Se mantiene corto y sin ambiguedad, porque el
     # asunto es lo unico que muchos destinatarios llegan a leer.
@@ -74,46 +74,42 @@ class RedactorCorreo:
         TipoVeredicto.REVISION: "Gasto {id} pendiente de revisión",
     }
 
-    # Segundo parrafo. No repite la resolucion, que ya se ha explicado en el
-    # racional de apertura: indica su consecuencia practica, que es la duda
-    # inmediata de quien recibe el mensaje.
+    # Primera frase del mensaje, que abre el parrafo de explicacion. A partir
+    # de aqui el registro es el de una persona que ha revisado el apunte y
+    # cuenta lo que ha visto, no el de un sistema que notifica una resolucion.
     APERTURAS = {
-        TipoVeredicto.APROBADO: (
-            "El importe se incluirá en la próxima liquidación mensual, sin que "
-            "sea necesaria ninguna gestión adicional por tu parte."
-        ),
+        TipoVeredicto.APROBADO: "He revisado tu gasto {id} y está todo correcto.",
         TipoVeredicto.DENEGADO: (
-            "En consecuencia, el importe no se incorporará a la liquidación "
-            "del periodo."
+            "He estado revisando tu gasto {id} y me temo que no voy a poder "
+            "reembolsártelo."
         ),
         TipoVeredicto.PARCIAL: (
-            "Se liquidará únicamente la parte cubierta por la política; el "
-            "importe correspondiente a los conceptos excluidos quedará fuera "
-            "de la liquidación."
+            "He revisado tu gasto {id} y puedo reembolsarte una parte, pero no "
+            "el total."
         ),
         TipoVeredicto.REVISION: (
-            "El apunte queda en suspenso y no se liquidará mientras no se "
-            "registre una decisión al respecto."
+            "Te paso el gasto {id} porque no consigo resolverlo por mi cuenta."
         ),
     }
 
-    # Parrafo de cierre segun el desenlace.
-    CIERRES = {
+    # Segundo parrafo: que ocurre ahora y que se espera de quien lee. Cierra la
+    # duda inmediata del destinatario en lugar de repetir la resolucion.
+    PETICIONES = {
         TipoVeredicto.APROBADO: (
-            "No es necesaria ninguna acción por tu parte."
+            "Lo incluyo en la liquidación de este mes, así que no tienes que "
+            "hacer nada."
         ),
         TipoVeredicto.DENEGADO: (
-            "Si consideras que concurren circunstancias excepcionales, puedes "
-            "solicitar una revisión a tu responsable directo en el plazo de "
-            "diez días hábiles."
+            "De momento lo dejo fuera de la liquidación. Si crees que hay algo "
+            "que se me escapa, dímelo y lo volvemos a mirar."
         ),
         TipoVeredicto.PARCIAL: (
-            "Si dispones de documentacion adicional que permita desglosar los "
-            "conceptos, remítela a este mismo buzón."
+            "Liquido la parte que sí entra. Si puedes desglosarme el resto, "
+            "mándamelo y lo ajusto."
         ),
         TipoVeredicto.REVISION: (
-            "Una vez tomes una decisión, regístrala en el sistema para que "
-            "quede constancia en el expediente del gasto."
+            "¿Puedes echarle un vistazo y decirme cómo lo dejamos? Mientras "
+            "tanto lo mantengo en suspenso."
         ),
     }
 
@@ -154,100 +150,102 @@ class RedactorCorreo:
         self, gasto: Gasto, veredicto: Veredicto, destinatario: str
     ) -> str:
         """
-        Redacta el cuerpo completo del mensaje.
+        Redacta el cuerpo del mensaje.
 
-        El orden de los bloques no es casual. El mensaje abre con el razonamiento
-        que ha llevado a la resolucion, antes que con cualquier otra cosa, porque
-        es lo unico que el destinatario necesita leer para entender que ha pasado
-        y por que. El detalle del gasto y el resto de la informacion van despues,
-        como respaldo de esa explicacion y no como preambulo de ella.
+        La estructura responde a como lee una persona. Arriba, en dos parrafos
+        de lenguaje corriente, va lo unico que el destinatario necesita saber:
+        que se ha mirado, que se ha encontrado y que pasa ahora. Abajo, separado
+        y despues de la firma, queda el bloque formal con las referencias.
 
-        Esa decision tiene ademas una lectura de gobernanza: un sistema que
-        comunica primero su criterio y luego los datos se puede auditar leyendo
-        un parrafo, mientras que uno que entierra el motivo al final obliga a
-        reconstruirlo.
+        El orden no es una preferencia estetica. Un mensaje que empieza por una
+        ficha de datos obliga a reconstruir el razonamiento; uno que empieza
+        explicando se entiende de una lectura. Y como el proposito de la
+        aplicacion es ensenar a supervisar decisiones automaticas, el mensaje
+        que produce deberia ser el primero en ponerselo facil a quien supervisa.
         """
-        # El saludo usa solo el nombre de pila cuando se dirige a una persona.
+        # Saludo con el nombre de pila. El registro es el de un companero que
+        # escribe, no el de un sistema que notifica.
         nombre_pila = destinatario.split()[0] if destinatario else "Hola"
 
-        # Parrafo de racional. Enlaza en prosa la resolucion, la clausula
-        # aplicada y el motivo concreto, de modo que quien lo reciba entienda
-        # la decision sin consultar ninguna tabla.
-        racional = self._componer_racional(gasto, veredicto)
-
-        # El bloque de detalle reproduce el apunte tal y como se presento. Es
-        # lo que permite al destinatario identificar el gasto sin abrir ningun
-        # sistema, y deja constancia de sobre que datos se decidio.
-        justificante = "Sí" if gasto.tiene_justificante else "No"
-        detalle = (
-            f"    Referencia:    {gasto.identificador}\n"
-            f"    Fecha:         {gasto.fecha}\n"
-            f"    Concepto:      {gasto.descripcion}\n"
-            f"    Categoría:     {gasto.categoria}\n"
-            f"    Ciudad:        {gasto.ciudad}\n"
-            f"    Importe:       {self._formatear_importe(gasto.importe, gasto.moneda)}\n"
-            f"    Justificante:  {justificante}"
-        )
-
         partes: List[str] = [
-            f"Estimado/a {nombre_pila}:",
+            f"Hola {nombre_pila}:",
             "",
-            racional,
+            self._componer_explicacion(gasto, veredicto),
             "",
-            self.APERTURAS[veredicto.tipo],
-            "",
-            "DETALLE DEL GASTO",
-            detalle,
-            "",
-            self.CIERRES[veredicto.tipo],
+            self.PETICIONES[veredicto.tipo],
             "",
             "Un saludo,",
-            "",
             self.CONTROLLER_NOMBRE,
             f"{self.CONTROLLER_CARGO} · {self.CONTROLLER_AREA}",
-            f"control.gestion@{self.DOMINIO}",
+            "",
+            "",
+            # Separador que marca el cambio de registro: lo de arriba se lee,
+            # lo de abajo se consulta.
+            "—" * 46,
+            "DATOS DEL APUNTE",
+            self._componer_ficha(gasto, veredicto),
         ]
         return "\n".join(partes)
 
-    def _componer_racional(self, gasto: Gasto, veredicto: Veredicto) -> str:
+    def _componer_explicacion(self, gasto: Gasto, veredicto: Veredicto) -> str:
         """
-        Redacta el parrafo de apertura con el razonamiento de la resolucion.
+        Redacta el parrafo en el que se cuenta que se ha visto.
 
-        Se construye en prosa a partir de tres piezas: que gasto es, que se ha
-        resuelto y por que. La cita de la clausula va integrada en la frase, no
-        como referencia suelta al final, porque el objetivo es que se lea como
-        una explicacion y no como un codigo administrativo.
+        Encadena la apertura con el motivo que elaboro el agente. Cuando ese
+        motivo contiene una discrepancia concreta -una fecha que no encaja con
+        el periodo de un evento, una empresa que no aparece por ningun lado-, es
+        precisamente eso lo que queda en la primera linea del mensaje, que es
+        donde tiene que estar.
         """
-        # Verbo acorde a la resolucion. Evita la formula neutra "se ha
-        # resuelto", que obliga al lector a deducir el sentido de la decision.
-        verbos = {
-            TipoVeredicto.APROBADO: "se aprueba",
-            TipoVeredicto.DENEGADO: "no puede aprobarse",
-            TipoVeredicto.PARCIAL: "se aprueba solo en parte",
-            TipoVeredicto.REVISION: "no ha podido resolverse de forma automática",
-        }
-        verbo = verbos[veredicto.tipo]
+        apertura = self.APERTURAS[veredicto.tipo].format(id=gasto.identificador)
 
-        # Referencia a la clausula, omitida cuando el agente no supo indicar
-        # ninguna: es preferible una frase mas corta que una cita vacia.
-        clausula = (veredicto.clausula or "").strip()
-        if clausula and clausula.lower() not in ("sin indicar", "-", "none"):
-            referencia = f", en aplicación de la cláusula {clausula} de la política de viajes,"
-        else:
-            referencia = ""
-
-        # El motivo se incorpora tal cual lo redacto el agente, garantizando
-        # que termina en punto para que el parrafo cierre correctamente.
+        # El motivo llega tal y como lo redacto el agente, y hay que acoplarlo
+        # a la frase anterior: el modelo suele empezarlo en minuscula, de modo
+        # que al encadenarlo tras un punto quedaria mal escrito. Se ajusta la
+        # primera letra sin tocar el resto, para no alterar lo que redacto.
         motivo = veredicto.motivo.strip()
-        if motivo and not motivo.endswith("."):
+        if motivo:
+            motivo = motivo[0].upper() + motivo[1:]
+
+        # Se asegura el punto final para que el parrafo cierre bien.
+        if motivo and not motivo.endswith((".", "?", "!")):
             motivo += "."
 
+        # Sin motivo se recurre a una formula neutra antes que dejar la frase
+        # colgando, aunque es una situacion que el analizador ya evita.
+        if not motivo:
+            motivo = "No consta el detalle de la revisión."
+
+        return f"{apertura} {motivo}"
+
+    def _componer_ficha(self, gasto: Gasto, veredicto: Veredicto) -> str:
+        """
+        Compone el bloque formal que cierra el mensaje.
+
+        Reune en un solo sitio todo lo que hace falta para auditar la decision:
+        el apunte tal y como se presento, la resolucion y la clausula aplicada.
+        Va al final porque es material de consulta, no de lectura.
+        """
+        justificante = "Sí" if gasto.tiene_justificante else "No"
+
+        # La clausula puede no constar cuando el agente no supo identificarla.
+        # Se declara como tal en lugar de dejar el campo vacio, porque la
+        # ausencia de referencia normativa es en si misma un dato relevante.
+        clausula = (veredicto.clausula or "").strip()
+        if not clausula or clausula.lower() in ("sin indicar", "-", "none"):
+            clausula = "no identificada"
+
         return (
-            f"Tras revisar el gasto {gasto.identificador}, de "
-            f"{self._formatear_importe(gasto.importe, gasto.moneda)} y con fecha "
-            f"{gasto.fecha}, "
-            f"correspondiente a «{gasto.descripcion}»{referencia} "
-            f"{verbo}. {motivo}"
+            f"Referencia:    {gasto.identificador}\n"
+            f"Empleado:      {gasto.empleado}\n"
+            f"Fecha:         {gasto.fecha}\n"
+            f"Concepto:      {gasto.descripcion}\n"
+            f"Categoría:     {gasto.categoria}\n"
+            f"Ciudad:        {gasto.ciudad}\n"
+            f"Importe:       {self._formatear_importe(gasto.importe, gasto.moneda)}\n"
+            f"Justificante:  {justificante}\n"
+            f"Resolución:    {veredicto.tipo.value}\n"
+            f"Cláusula:      {clausula}"
         )
 
     def _formatear_importe(self, importe: float, moneda: str) -> str:

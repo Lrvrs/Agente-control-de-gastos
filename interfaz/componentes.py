@@ -293,16 +293,12 @@ class Componentes:
     # Clase CSS, icono, titulo y coletilla de cada desenlace. El texto del
     # detalle se completa en la pantalla con el veredicto del agente, que es el
     # dato que el alumno necesita para situar su propia respuesta.
-    # Clase CSS, icono y titulo de cada desenlace. No se nombra el tipo de
-    # veredicto: al alumno se le dice si acerto, y el porque va en la frase del
-    # motivo. Los nombres internos -APROBADO, PARCIAL, REVISION- pertenecen al
-    # agente y no aportan nada a quien esta aprendiendo a supervisarlo.
+    # Clase CSS, icono y titulo de cada desenlace. Solo hay dos: la correccion
+    # es binaria, como los dos botones de la fila. No se nombra el tipo de
+    # veredicto del agente; el porque va en la frase del motivo.
     TEXTOS_CORRECCION = {
         Correccion.ACERTADA: ("correccion-acertada", "\u2713", "Correcto"),
         Correccion.FALLADA: ("correccion-fallada", "\u2717", "Incorrecto"),
-        Correccion.MATIZADA: (
-            "correccion-matizada", "!", "Ni correcto ni incorrecto",
-        ),
     }
 
     @staticmethod

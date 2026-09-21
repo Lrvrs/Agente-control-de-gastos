@@ -368,9 +368,6 @@ class GestorEstilos:
             background: #FDECEA; border: 1px solid #F3B7B0; color: #8C1D13;
         }}
 
-        .correccion-matizada {{
-            background: #FFF4E5; border: 1px solid #F0C98A; color: #8A5200;
-        }}
 
         /* Bloque principal con el razonamiento. Tipografia de lectura y
            tamano algo mayor de lo habitual: es el texto que el alumno debe

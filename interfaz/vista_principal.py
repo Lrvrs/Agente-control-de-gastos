@@ -12,7 +12,9 @@ from dominio.correo import RedactorCorreo
 from dominio.gasto import ConjuntoGastos
 from dominio.politica import Politica
 from dominio.veredicto import (
+    Correccion,
     ResultadoEvaluacion,
+    corregir_decision,
     firma_estructural,
 )
 from infraestructura.buscador_web import FabricaBuscadores
@@ -756,6 +758,12 @@ class VistaPrincipal:
                 enviado=gasto.identificador in enviados,
             )
 
+        # Marcador del aula, debajo de la lista. Estaba escrito desde hace
+        # varias versiones pero nadie lo llamaba, de modo que no se pintaba en
+        # ningun momento. Ahora que la correccion es binaria encaja sin
+        # ambiguedad: cada gasto revisado cae en aciertos o en fallos.
+        self._renderizar_balance(gastos, resultado)
+
         # Si hay un correo seleccionado, se abre la ventana emergente.
         identificador = st.session_state[self.CLAVE_CORREO_ABIERTO]
         if identificador:
@@ -829,22 +837,8 @@ class VistaPrincipal:
 
         st.rerun()
 
-    def _hay_discrepancia(self, veredicto, decision: str) -> bool:
-        """Indica si la decision del alumno contradice al agente."""
-        # Sin decision no hay nada que comparar.
-        if not decision:
-            return False
-
-        # PARCIAL y REVISION no son propuestas cerradas: el agente esta
-        # pidiendo que decida una persona, asi que lo que el alumno resuelva
-        # ahi no contradice nada.
-        if veredicto.requiere_persona:
-            return False
-
-        return veredicto.tipo.value != decision
-
     def _renderizar_balance(self, gastos, resultado) -> None:
-        """Pinta el recuento de coincidencias, discrepancias y pendientes."""
+        """Pinta el marcador de aciertos, fallos y gastos sin revisar."""
         decisiones = st.session_state[self.CLAVE_DECISIONES]
 
         coincidencias = 0
@@ -858,10 +852,13 @@ class VistaPrincipal:
             if veredicto is None:
                 continue
 
-            if self._hay_discrepancia(veredicto, decision):
-                discrepancias += 1
-            else:
+            # Se reutiliza la misma regla que corrige al alumno en la ventana,
+            # para que el recuento de abajo no pueda contradecir lo que se le
+            # acaba de decir gasto por gasto.
+            if corregir_decision(veredicto, decision) is Correccion.ACERTADA:
                 coincidencias += 1
+            else:
+                discrepancias += 1
 
         pendientes = len(gastos) - coincidencias - discrepancias
 

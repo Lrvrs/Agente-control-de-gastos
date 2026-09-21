@@ -84,20 +84,22 @@ class Veredicto:
         )
 
     @property
-    def es_favorable(self) -> bool:
-        """Indica si el gasto sale adelante sin objeciones."""
-        return self.tipo is TipoVeredicto.APROBADO
-
-    @property
-    def requiere_persona(self) -> bool:
+    def decision_esperada(self) -> str:
         """
-        Indica si este veredicto debe pasar por una persona antes de cerrarse.
+        Respuesta que se considera acertada para este veredicto.
 
-        Se agrupan REVISION y PARCIAL porque en ambos casos el agente esta
-        declarando que su decision no es completa, que es exactamente el punto
-        en que la supervision humana aporta valor.
+        La correccion del ejercicio es binaria, asi que los cuatro tipos de
+        veredicto tienen que caer de un lado o del otro. Solo APROBADO admite
+        que el gasto se pague tal como viene. PARCIAL sostiene que una parte no
+        es reembolsable y REVISION que el caso no puede cerrarse con los datos
+        disponibles: en ambos, dar el gasto por bueno y mandarlo a pagar seria
+        un error, de modo que la respuesta correcta es denegarlo y devolverlo a
+        quien lo presento.
         """
-        return self.tipo in (TipoVeredicto.REVISION, TipoVeredicto.PARCIAL)
+        if self.tipo is TipoVeredicto.APROBADO:
+            return "APROBADO"
+
+        return "DENEGADO"
 
 
 @dataclass
@@ -200,9 +202,6 @@ class Correccion(str, Enum):
     # El alumno resolvió lo contrario de lo que el agente había concluido.
     FALLADA = "FALLADA"
 
-    # El agente no emitió un sí ni un no, de modo que ninguna de las dos
-    # respuestas del alumno puede calificarse de correcta o incorrecta.
-    MATIZADA = "MATIZADA"
 
 
 def corregir_decision(veredicto: Veredicto, decision: str) -> Correccion | None:
@@ -212,21 +211,16 @@ def corregir_decision(veredicto: Veredicto, decision: str) -> Correccion | None:
     Devuelve None cuando el alumno todavía no se ha pronunciado, porque
     entonces no hay nada que corregir.
 
-    Los veredictos PARCIAL y REVISION reciben trato propio y no se cuentan como
-    fallo. En ellos el agente no ha afirmado que el gasto proceda ni que no
-    proceda: en el primero sostiene que solo una parte es reembolsable y en el
-    segundo declara que no puede resolverlo. Calificar de incorrecta una
-    respuesta binaria ante un caso que no lo es seria enseñar lo contrario de lo
-    que el ejercicio pretende, que es precisamente reconocer cuándo un problema
-    no se cierra con un sí o un no.
+    La correccion es binaria a proposito. El agente maneja cuatro tipos de
+    veredicto, pero el alumno solo dispone de dos botones, y el ejercicio
+    consiste en decidir si el gasto se paga o no se paga. Cada veredicto se
+    traduce por tanto a la respuesta que se espera de una persona que lo
+    supervise, que es lo que devuelve decision_esperada.
     """
     if not decision:
         return None
 
-    if veredicto.requiere_persona:
-        return Correccion.MATIZADA
-
-    if veredicto.tipo.value == decision:
+    if decision == veredicto.decision_esperada:
         return Correccion.ACERTADA
 
     return Correccion.FALLADA

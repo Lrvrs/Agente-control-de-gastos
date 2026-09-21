@@ -88,12 +88,20 @@ class ServicioEvaluacion:
 
         # Paso 1: cache. Es el camino mas frecuente al principio de la clase,
         # cuando todos evaluan con la politica por defecto sin haberla tocado.
-        resultado_en_cache = (
+        entrada_en_cache = (
             self._cache.obtener(politica.huella, huella_gastos)
             if usar_cache
             else None
         )
-        if resultado_en_cache is not None:
+        if entrada_en_cache is not None:
+            resultado_en_cache, traza_guardada = entrada_en_cache
+
+            # La traza se restituye junto con el resultado. Sin esto, servir una
+            # evaluacion desde la cache dejaba el panel de verificacion vacio y
+            # parecia que el agente no habia comprobado nada, cuando lo que
+            # ocurria es que lo habia comprobado en la evaluacion original.
+            self.traza_verificacion = list(traza_guardada)
+
             # Se devuelve una copia marcada como procedente de cache para que la
             # interfaz pueda indicarlo sin alterar la entrada almacenada.
             return self._marcar_como_cache(resultado_en_cache)
@@ -111,7 +119,9 @@ class ServicioEvaluacion:
         resultado.huella_politica = politica.huella
 
         # Paso 5: guardar para que la siguiente peticion identica salga gratis.
-        self._cache.guardar(politica.huella, huella_gastos, resultado)
+        self._cache.guardar(
+            politica.huella, huella_gastos, resultado, self.traza_verificacion
+        )
 
         return resultado
 

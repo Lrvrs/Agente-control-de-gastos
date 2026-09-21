@@ -1,6 +1,6 @@
 """Cache en memoria de evaluaciones ya realizadas."""
 
-from typing import Dict, Optional
+from typing import Dict, List, Optional, Tuple
 
 from dominio.veredicto import ResultadoEvaluacion
 
@@ -31,7 +31,11 @@ class CacheEvaluaciones:
         # Se usa un diccionario ordinario: desde Python 3.7 conserva el orden de
         # insercion, lo que permite descartar la entrada mas antigua sin
         # estructuras adicionales.
-        self._entradas: Dict[str, ResultadoEvaluacion] = {}
+        # Cada entrada guarda el resultado y la traza de verificacion que lo
+        # produjo. Van juntos porque son la misma cosa: las consultas explican
+        # ese resultado concreto, y separarlos hacia que al servir de cache se
+        # devolviera el veredicto sin el rastro de como se llego a el.
+        self._entradas: Dict[str, Tuple[ResultadoEvaluacion, List]] = {}
 
     def _construir_clave(self, huella_politica: str, huella_gastos: str) -> str:
         """Compone la clave que identifica de forma unica una evaluacion."""
@@ -41,8 +45,14 @@ class CacheEvaluaciones:
 
     def obtener(
         self, huella_politica: str, huella_gastos: str
-    ) -> Optional[ResultadoEvaluacion]:
-        """Devuelve el resultado guardado, o None si no hay ninguno."""
+    ) -> Optional[Tuple[ResultadoEvaluacion, List]]:
+        """
+        Devuelve el par resultado y traza guardado, o None si no hay ninguno.
+
+        Se devuelven los dos juntos y no solo el resultado para que quien sirva
+        una evaluacion desde la cache pueda enseñar tambien que se comprobo
+        para llegar a ella.
+        """
         clave = self._construir_clave(huella_politica, huella_gastos)
         return self._entradas.get(clave)
 
@@ -51,8 +61,9 @@ class CacheEvaluaciones:
         huella_politica: str,
         huella_gastos: str,
         resultado: ResultadoEvaluacion,
+        traza: Optional[List] = None,
     ) -> None:
-        """Almacena un resultado, desalojando el mas antiguo si hace falta."""
+        """Almacena un resultado y su traza, desalojando el mas antiguo."""
         # Politica de desalojo sencilla: se elimina la entrada mas antigua.
         # No se implementa un algoritmo mas fino porque el volumen no lo exige y
         # la complejidad adicional no se pagaria con ninguna mejora observable.
@@ -61,7 +72,7 @@ class CacheEvaluaciones:
             del self._entradas[clave_mas_antigua]
 
         clave = self._construir_clave(huella_politica, huella_gastos)
-        self._entradas[clave] = resultado
+        self._entradas[clave] = (resultado, list(traza or []))
 
     @property
     def numero_de_entradas(self) -> int:

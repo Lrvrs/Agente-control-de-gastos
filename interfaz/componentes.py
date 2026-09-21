@@ -323,6 +323,192 @@ class Componentes:
         Correccion.FALLADA: ("correccion-fallada", "\u2717", "Incorrecto"),
     }
 
+    # ------------------------------------------------------------------
+    # Diagrama del bucle del agente
+    # ------------------------------------------------------------------
+
+    # Carriles del diagrama, en orden de izquierda a derecha: rotulo, color,
+    # coordenada x y anchura. El color no es decorativo: dice quien ejecuta
+    # cada caja, que es justamente lo que el diagrama viene a explicar.
+    CARRILES = (
+        ("ALUMNO", Paleta.MORADO, 16, 176),
+        ("APLICACIÓN", Paleta.AZUL, 204, 268),
+        ("GROQ · MODELO", Paleta.AMBAR, 484, 196),
+        ("TAVILY · BÚSQUEDA", Paleta.VERDE, 692, 192),
+    )
+
+    # Pasos del bucle: carril, coordenada y, altura, titulo y subtitulo. Se
+    # declaran como datos y no como SVG escrito a mano para que reordenar o
+    # renombrar un paso sea cambiar una linea, y no recolocar coordenadas.
+    PASOS = (
+        (0, 74, 46, "Pulsa «Evaluar»", ""),
+        (1, 140, 46, "Carga gastos y política", ""),
+        (1, 206, 50, "¿Ya está en caché?", "misma política, mismos gastos"),
+        (2, 282, 54, "Pasada 1 · planificar", "qué hay que comprobar"),
+        (3, 362, 54, "Busca en internet", "una consulta cada vez"),
+        (1, 442, 50, "Compone los hechos", "recorta y ordena lo hallado"),
+        (2, 518, 54, "Pasada 2 · resolver", "un veredicto por gasto"),
+        (1, 598, 46, "Valida, repesca y guarda", ""),
+        (0, 664, 50, "Aprueba o deniega", "sin ver el veredicto"),
+        (1, 740, 50, "Correcto o incorrecto", "con el motivo del agente"),
+        (2, 816, 50, "Pasada 3 · el correo", "redacta el cuerpo"),
+    )
+
+    # Texto de la flecha que sale de cada paso, cuando lo tiene. La clave es el
+    # indice del paso de origen. Describe lo que viaja, no lo que ocurre.
+    ETIQUETAS_FLECHA = {
+        2: "política + descripciones",
+        3: "consultas",
+        4: "resúmenes y fuentes",
+        5: "política + hechos + gastos",
+        6: "veredictos",
+        7: "lista de gastos",
+        8: "✓ o ✗",
+    }
+
+    # Alto total del lienzo. Se deja algo por debajo del ultimo paso para que la
+    # caja no quede pegada al borde del carril.
+    ALTO_DIAGRAMA = 886
+
+    @staticmethod
+    def _centro_de_carril(indice: int) -> float:
+        """Devuelve la coordenada x del centro del carril indicado."""
+        _, _, x, ancho = Componentes.CARRILES[indice]
+        return x + ancho / 2
+
+    @staticmethod
+    def _svg_del_bucle() -> str:
+        """
+        Compone el SVG del diagrama a partir de CARRILES y PASOS.
+
+        Se genera en lugar de escribirse a mano porque las coordenadas de las
+        flechas dependen de las de las cajas: calcularlas evita que al mover un
+        paso queden flechas apuntando a donde ya no hay nada.
+        """
+        partes: List[str] = []
+
+        # Carriles: fondo tenue del color del servicio y rotulo encima.
+        for rotulo, color, x, ancho in Componentes.CARRILES:
+            partes.append(
+                f'<rect x="{x}" y="48" width="{ancho}" height="824" rx="12" '
+                f'fill="{color}" fill-opacity="0.07"></rect>'
+                f'<text x="{x + ancho / 2}" y="36" text-anchor="middle" '
+                f'font-size="14" font-weight="600" letter-spacing="0.06em" '
+                f'fill="{color}">{escape(rotulo)}</text>'
+            )
+
+        # Atajo de la cache: de la pregunta directamente al paso de guardado,
+        # rodeando por fuera las dos pasadas por el modelo.
+        partes.append(
+            '<path d="M204 231 H194 V621 H204" fill="none" '
+            f'stroke="{Paleta.VERDE}" stroke-width="1.6" stroke-dasharray="5 5" '
+            'marker-end="url(#punta)"></path>'
+        )
+
+        # Flechas entre pasos consecutivos, y su etiqueta cuando la tienen.
+        for indice in range(len(Componentes.PASOS) - 1):
+            carril, y, alto, _, _ = Componentes.PASOS[indice]
+            carril_siguiente, y_siguiente = Componentes.PASOS[indice + 1][:2]
+
+            origen = Componentes._centro_de_carril(carril)
+            destino = Componentes._centro_de_carril(carril_siguiente)
+            pie = y + alto
+            medio = (pie + y_siguiente) / 2
+
+            if carril == carril_siguiente:
+                trazo = f"M{origen} {pie} V{y_siguiente - 3}"
+            else:
+                trazo = (
+                    f"M{origen} {pie} V{medio} H{destino} V{y_siguiente - 3}"
+                )
+
+            partes.append(
+                f'<path d="{trazo}" fill="none" stroke="{Paleta.TEXTO_SUAVE}" '
+                'stroke-width="1.6" marker-end="url(#punta-gris)"></path>'
+            )
+
+            etiqueta = Componentes.ETIQUETAS_FLECHA.get(indice)
+            if etiqueta:
+                partes.append(
+                    f'<text x="{(origen + destino) / 2}" y="{medio - 5}" '
+                    f'text-anchor="middle" font-size="11.5" '
+                    f'fill="{Paleta.ETIQUETA}">{escape(etiqueta)}</text>'
+                )
+
+        # Cajas. Van las ultimas para quedar por encima de las flechas.
+        for carril, y, alto, titulo, subtitulo in Componentes.PASOS:
+            _, color, x, ancho = Componentes.CARRILES[carril]
+            centro = x + ancho / 2
+
+            partes.append(
+                f'<rect x="{x + 12}" y="{y}" width="{ancho - 24}" '
+                f'height="{alto}" rx="9" fill="{Paleta.BLANCO}" '
+                f'stroke="{color}" stroke-width="1.4"></rect>'
+            )
+
+            if subtitulo:
+                partes.append(
+                    f'<text x="{centro}" y="{y + 22}" text-anchor="middle" '
+                    f'font-size="15.5" font-weight="600" '
+                    f'fill="{Paleta.TEXTO}">{escape(titulo)}</text>'
+                    f'<text x="{centro}" y="{y + 40}" text-anchor="middle" '
+                    f'font-size="12.5" fill="{Paleta.TEXTO_SUAVE}">'
+                    f'{escape(subtitulo)}</text>'
+                )
+            else:
+                partes.append(
+                    f'<text x="{centro}" y="{y + alto / 2 + 4.5}" '
+                    f'text-anchor="middle" font-size="15.5" font-weight="600" '
+                    f'fill="{Paleta.TEXTO}">{escape(titulo)}</text>'
+                )
+
+        cuerpo = "".join(partes)
+        return (
+            f'<svg viewBox="0 0 900 {Componentes.ALTO_DIAGRAMA}" '
+            'width="100%" role="img" '
+            'aria-label="Diagrama de carriles del bucle del agente de gastos">'
+            '<defs>'
+            '<marker id="punta-gris" viewBox="0 0 10 10" refX="9" refY="5" '
+            'markerWidth="6.5" markerHeight="6.5" orient="auto-start-reverse">'
+            f'<path d="M0 0 L10 5 L0 10 z" fill="{Paleta.TEXTO_SUAVE}"></path>'
+            '</marker>'
+            '<marker id="punta" viewBox="0 0 10 10" refX="9" refY="5" '
+            'markerWidth="6" markerHeight="6" orient="auto-start-reverse">'
+            f'<path d="M0 0 L10 5 L0 10 z" fill="{Paleta.VERDE}"></path>'
+            '</marker>'
+            '</defs>'
+            f'{cuerpo}</svg>'
+        )
+
+    @staticmethod
+    def diagrama_bucle() -> None:
+        """Pinta el diagrama del bucle con su leyenda, para proyectarlo."""
+        st.markdown(
+            '<div class="diagrama">' + Componentes._svg_del_bucle() + '</div>',
+            unsafe_allow_html=True,
+        )
+
+        # Leyenda. Repite los colores de los carriles porque el diagrama se
+        # proyecta y quien lo mira de lejos necesita la clave a mano.
+        claves = "".join(
+            f'<span class="clave-carril">'
+            f'<i style="background:{color}"></i>{escape(texto)}</span>'
+            for color, texto in (
+                (Paleta.MORADO, "una persona"),
+                (Paleta.AZUL, "el código"),
+                (Paleta.AMBAR, "el modelo decide"),
+                (Paleta.VERDE, "sale a internet"),
+            )
+        )
+        st.markdown(
+            f'<div class="leyenda-diagrama">{claves}</div>'
+            '<div class="celda-meta" style="margin-top:10px">'
+            'La línea discontinua es el atajo de la caché: si nadie ha tocado '
+            'la política, el resultado ya está guardado y no se llama al '
+            'modelo ni una vez.</div>',
+            unsafe_allow_html=True,
+        )
+
     @staticmethod
     def pantalla_resolucion(gasto, veredicto, decision: str) -> None:
         """

@@ -163,6 +163,27 @@ class GestorEstilos:
 
         .banner {{ margin-bottom: 26px; }}
 
+        /* Lienzo del diagrama del bucle. Se le da desplazamiento horizontal
+           propio para que en una pantalla estrecha se pueda arrastrar en lugar
+           de encogerse hasta ser ilegible. */
+        .diagrama {{
+            background: {Paleta.BLANCO}; border: 1px solid {Paleta.BORDE};
+            border-radius: 12px; padding: 6px; overflow-x: auto;
+        }}
+
+        .diagrama svg {{ min-width: 520px; display: block; }}
+
+        .leyenda-diagrama {{
+            display: flex; flex-wrap: wrap; gap: 8px 20px; margin-top: 12px;
+            font-size: 12px; color: {Paleta.TEXTO_SUAVE};
+        }}
+
+        .clave-carril {{ display: inline-flex; align-items: center; gap: 7px; }}
+
+        .clave-carril i {{
+            width: 9px; height: 9px; border-radius: 50%; display: inline-block;
+        }}
+
         .banner-hueco {{
             height: 104px; border-radius: 14px; margin-bottom: 26px;
             border: 1.5px dashed {Paleta.BORDE};

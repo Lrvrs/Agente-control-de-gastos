@@ -59,6 +59,9 @@ class VistaPrincipal:
     CLAVE_BIENVENIDA_CERRADA = "bienvenida_cerrada"
     CLAVE_RESOLUCION_ABIERTA = "resolucion_abierta"
 
+    # Verdadero mientras el diagrama del bucle esta pedido.
+    CLAVE_DIAGRAMA_ABIERTO = "diagrama_abierto"
+
     def __init__(self) -> None:
         """Construye las dependencias de la vista una sola vez por ejecucion."""
         self._configuracion = Configuracion()
@@ -147,6 +150,7 @@ class VistaPrincipal:
         # cerrar la ventana. Dibujarlo todo y superponer la modal encima evita
         # el problema de raiz, y visualmente es lo mismo porque la modal oscurece
         # el fondo.
+        self._mostrar_diagrama()
         self._mostrar_bienvenida()
 
     # ------------------------------------------------------------------
@@ -212,6 +216,28 @@ class VistaPrincipal:
 
         # Gasto cuya resolucion se esta consultando, o None.
         st.session_state.setdefault(self.CLAVE_RESOLUCION_ABIERTA, None)
+
+        # Peticion de abrir el diagrama del bucle.
+        st.session_state.setdefault(self.CLAVE_DIAGRAMA_ABIERTO, False)
+
+    def _mostrar_diagrama(self) -> None:
+        """Abre la ventana con el diagrama del bucle, si se ha pedido."""
+        if not st.session_state[self.CLAVE_DIAGRAMA_ABIERTO]:
+            return
+
+        # La peticion se consume al abrir, como en el resto de ventanas: si
+        # quedase puesta, la modal se reabriria en cada repintado.
+        st.session_state[self.CLAVE_DIAGRAMA_ABIERTO] = False
+
+        @st.dialog("El bucle del agente", width="large")
+        def ventana() -> None:
+            """Contenido de la ventana del diagrama."""
+            Componentes.diagrama_bucle()
+
+            if st.button("Cerrar", type="primary", use_container_width=True):
+                st.rerun()
+
+        ventana()
 
     def _mostrar_bienvenida(self) -> None:
         """
@@ -426,20 +452,41 @@ class VistaPrincipal:
     # ------------------------------------------------------------------
 
     def _renderizar_cabecera(self) -> None:
-        """Pinta la etiqueta, el titulo y el parrafo explicativo."""
-        Componentes.cabecera(
-            etiqueta="Panel",
-            titulo="Agente de gastos en base a política corporativa",
-            entradilla_html=(
-                "El agente evalúa cada apunte de viaje contra la "
-                "<strong>política corporativa</strong> que tienes abajo, y "
-                "para cada uno redacta el correo que enviaría al empleado o a "
-                "su responsable. "
-                "Cambia una regla, vuelve a evaluar y observa qué decisiones "
-                "se mueven: el comportamiento del sistema lo decide el texto "
-                "que escribes, no el modelo."
-            ),
-        )
+        """Pinta la etiqueta, el titulo, el parrafo y el boton del diagrama."""
+        # El titulo ocupa la mayor parte del ancho y el boton se apoya en el
+        # borde derecho, a su altura. Se reparte en columnas y no con HTML
+        # porque el boton tiene que ser un control de Streamlit para poder
+        # abrir la ventana.
+        columna_titulo, columna_boton = st.columns([4, 1])
+
+        with columna_boton:
+            # Pequeno respiro para que el boton no quede pegado al banner y
+            # caiga a la altura del titulo.
+            st.markdown("<div style='height:26px'></div>", unsafe_allow_html=True)
+
+            if st.button(
+                "Ver el bucle",
+                help="Abre el diagrama del bucle del agente, para explicarlo",
+                use_container_width=True,
+            ):
+                st.session_state[self.CLAVE_DIAGRAMA_ABIERTO] = True
+                st.rerun()
+
+        with columna_titulo:
+            Componentes.cabecera(
+                etiqueta="Panel",
+                titulo="Agente de gastos en base a política corporativa",
+                entradilla_html=(
+                    "El agente evalúa cada apunte de viaje contra la "
+                    "<strong>política corporativa</strong> que tienes abajo, y "
+                    "para cada uno redacta el correo que enviaría al empleado "
+                    "o a su responsable. "
+                    "Cambia una regla, vuelve a evaluar y observa qué "
+                    "decisiones "
+                    "se mueven: el comportamiento del sistema lo decide el "
+                    "texto que escribes, no el modelo."
+                ),
+            )
 
     def _renderizar_resumen(self, gastos: ConjuntoGastos) -> None:
         """Pinta la fila de tarjetas con el estado de la ejecucion."""

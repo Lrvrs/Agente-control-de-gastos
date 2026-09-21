@@ -283,17 +283,55 @@ class VistaPrincipal:
                 st.session_state[clave] = None
                 st.session_state[self.CLAVE_CORREO_ABIERTO] = None
 
+    # Nombre del parametro de URL que recuerda el acceso concedido. Se elige
+    # corto y neutro porque va a estar a la vista en la barra de direcciones.
+    PARAMETRO_ACCESO = "aula"
+
+    def _ficha_de_acceso(self, contrasena: str) -> str:
+        """
+        Deriva de la contrasena el testigo que viaja en la URL.
+
+        No se pone la contrasena en la direccion, aunque el efecto practico
+        seria el mismo, por dos motivos. Uno, que queda a la vista en la barra
+        del navegador y en el proyector del aula. Y dos, que la misma
+        contrasena suele reutilizarse en otras cosas, y dejarla escrita en un
+        sitio del que se copia y se pega invita a que acabe donde no debe.
+        """
+        # SHA-256 truncado. No protege nada frente a quien tenga el testigo:
+        # es exactamente igual de fuerte que la contrasena, porque sirve para
+        # lo mismo. Solo evita que el texto original quede legible.
+        return hashlib.sha256(
+            f"agente-gastos-esic::{contrasena}".encode("utf-8")
+        ).hexdigest()[:20]
+
     def _verificar_acceso(self) -> bool:
         """
         Comprueba la contrasena de clase, si se ha configurado alguna.
 
         Devuelve True cuando se puede continuar. La puerta existe porque la URL
         de la aplicacion es publica y la clave de API que consume es compartida.
+
+        El acceso concedido se recuerda en la propia URL y no solo en la
+        sesion. Guardarlo unicamente en session_state obligaba a teclear la
+        contrasena en cada refresco, porque refrescar el navegador abre una
+        sesion nueva, y en una clase el refresco es la maniobra mas habitual:
+        se usa para empezar limpio con el siguiente ejercicio. Con el testigo
+        en la direccion, el alumno la escribe una vez y puede refrescar, abrir
+        pestanas o recuperar la pagina del historial sin volver a pasar por la
+        puerta.
         """
         contrasena_esperada = self._configuracion.aula.contrasena
 
         # Sin contrasena configurada, la aplicacion queda abierta.
         if not contrasena_esperada:
+            return True
+
+        esperado = self._ficha_de_acceso(contrasena_esperada)
+
+        # Testigo valido en la direccion: se da por concedido y se anota
+        # tambien en la sesion, para no recalcularlo en cada repintado.
+        if st.query_params.get(self.PARAMETRO_ACCESO) == esperado:
+            st.session_state[self.CLAVE_ACCESO_CONCEDIDO] = True
             return True
 
         # Una vez validada, no se vuelve a pedir en la misma sesion.
@@ -311,6 +349,10 @@ class VistaPrincipal:
         # evita que la URL publica sea consumida por quien no esta en el aula.
         if introducida and introducida == contrasena_esperada:
             st.session_state[self.CLAVE_ACCESO_CONCEDIDO] = True
+
+            # El testigo se escribe en la URL antes de repintar, que es lo que
+            # hace que el acceso sobreviva al siguiente refresco.
+            st.query_params[self.PARAMETRO_ACCESO] = esperado
             st.rerun()
 
         # Mensaje solo si se ha escrito algo y no coincide, para no mostrar un
@@ -319,10 +361,6 @@ class VistaPrincipal:
             st.error("La contraseña no es correcta.")
 
         return False
-
-    # ------------------------------------------------------------------
-    # Barra lateral
-    # ------------------------------------------------------------------
 
     @staticmethod
     @st.cache_data

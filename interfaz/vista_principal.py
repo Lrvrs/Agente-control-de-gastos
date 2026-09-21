@@ -8,12 +8,11 @@ import streamlit as st
 from aplicacion.control_uso import ControlUso
 from aplicacion.redactor_cuerpo_correo import GeneradorCuerpoCorreo
 from aplicacion.servicio_evaluacion import ServicioEvaluacion
-from dominio.correo import RedactorCorreo, describir_contraste_de_fechas
+from dominio.correo import RedactorCorreo
 from dominio.gasto import ConjuntoGastos
 from dominio.politica import Politica
 from dominio.veredicto import (
     ResultadoEvaluacion,
-    TipoVeredicto,
     firma_estructural,
 )
 from infraestructura.buscador_web import FabricaBuscadores
@@ -214,6 +213,13 @@ class VistaPrincipal:
         if st.session_state[self.CLAVE_BIENVENIDA_CERRADA]:
             return
 
+        # Se da por vista en el momento de abrirla, no al pulsar Continuar. Una
+        # modal de Streamlit puede cerrarse tambien con su aspa o pulsando
+        # fuera, y en esos dos casos el boton no llega a ejecutarse: la marca
+        # quedaba sin poner y la ventana reaparecia en el siguiente repintado,
+        # por ejemplo al seleccionar un fichero de gastos.
+        st.session_state[self.CLAVE_BIENVENIDA_CERRADA] = True
+
         # Sin ilustracion no hay bienvenida que mostrar. Se comprueba antes de
         # abrir la ventana para no presentar un marco vacio si el fichero no
         # esta, que es el caso de cualquiera que clone el repositorio.
@@ -237,7 +243,6 @@ class VistaPrincipal:
             )
 
             if st.button("Continuar", type="primary", use_container_width=True):
-                st.session_state[self.CLAVE_BIENVENIDA_CERRADA] = True
                 st.rerun()
 
         ventana()
@@ -494,25 +499,11 @@ class VistaPrincipal:
         self, resultado: ResultadoEvaluacion, cambiados: list
     ) -> None:
         """Pinta el recuento por tipo de veredicto y los cambios detectados."""
-        recuento = resultado.recuento_por_tipo()
-
-        # Cuatro columnas, una por tipo de veredicto, mas la nota de cambios.
-        columnas = st.columns(4)
-        tipos_y_colores = [
-            (TipoVeredicto.APROBADO, Paleta.VERDE),
-            (TipoVeredicto.DENEGADO, Paleta.ROJO),
-            (TipoVeredicto.PARCIAL, Paleta.AMBAR),
-            (TipoVeredicto.REVISION, Paleta.MORADO),
-        ]
-
-        for columna, (tipo, color) in zip(columnas, tipos_y_colores):
-            with columna:
-                Componentes.tarjeta(
-                    titulo=tipo.value,
-                    dato=str(recuento[tipo]),
-                    nota="",
-                    color=color,
-                )
+        # Ya no se pinta el recuento por tipo de veredicto. Aparecia encima de
+        # la lista y anticipaba el reparto de resoluciones -cuantas aprobadas,
+        # cuantas denegadas- antes de que nadie hubiera revisado nada, con lo
+        # que el ejercicio se convertia en adivinar que gastos caian en cada
+        # cubo en lugar de juzgar cada uno por su cuenta.
 
         # Mensaje de cambios: es el que da sentido al ejercicio, asi que se
         # muestra de forma destacada y solo cuando hay algo que contar.
@@ -726,7 +717,7 @@ class VistaPrincipal:
 
     # Proporciones de las columnas de cada fila. Se declaran una sola vez
     # para que la cabecera y las filas de datos queden siempre alineadas.
-    PROPORCIONES_FILA = [0.7, 3.3, 1.1, 1.4, 1.5, 0.55, 0.55, 0.55]
+    PROPORCIONES_FILA = [0.7, 3.9, 1.2, 1.6, 0.6, 0.6, 0.6]
 
     def _renderizar_lista_interactiva(self, gastos, resultado, cambiados) -> None:
         """
@@ -785,14 +776,12 @@ class VistaPrincipal:
         with columnas[2]:
             Componentes.celda_importe(gasto)
         with columnas[3]:
-            Componentes.celda_veredicto(veredicto)
-        with columnas[4]:
             Componentes.celda_decision(decision, discrepa=False)
 
         # Los tres controles de la fila. Etiquetas de un solo caracter para que
         # quepan sin descuadrar la rejilla, con ayuda emergente que explica que
         # hace cada uno, porque un icono suelto no es autoexplicativo.
-        with columnas[5]:
+        with columnas[4]:
             if st.button(
                 "✓", key=f"ap_{gasto.identificador}",
                 help="Aprobar este gasto",
@@ -800,7 +789,7 @@ class VistaPrincipal:
             ):
                 self._registrar_decision(gasto.identificador, "APROBADO")
 
-        with columnas[6]:
+        with columnas[5]:
             if st.button(
                 "✗", key=f"de_{gasto.identificador}",
                 help="Denegar este gasto",
@@ -808,7 +797,7 @@ class VistaPrincipal:
             ):
                 self._registrar_decision(gasto.identificador, "DENEGADO")
 
-        with columnas[7]:
+        with columnas[6]:
             # El sobre cambia cuando el correo ya se autorizo, para que el
             # estado sea visible sin abrir la ventana.
             if st.button(
@@ -883,12 +872,12 @@ class VistaPrincipal:
         columna_a, columna_b, columna_c = st.columns(3)
         with columna_a:
             Componentes.tarjeta(
-                "Coincides con el agente", str(coincidencias), "", Paleta.VERDE
+                "Correctos", str(coincidencias), "", Paleta.VERDE
             )
         with columna_b:
             Componentes.tarjeta(
-                "Discrepas", str(discrepancias),
-                "Justifica cada una citando la cláusula.", Paleta.ROJO,
+                "Incorrectos", str(discrepancias),
+                "Revisa el motivo de cada uno.", Paleta.ROJO,
             )
         with columna_c:
             Componentes.tarjeta(
@@ -915,12 +904,10 @@ class VistaPrincipal:
 
         decision = st.session_state[self.CLAVE_DECISIONES].get(identificador, "")
 
-        @st.dialog(f"Resolución · {gasto.identificador}", width="small")
+        @st.dialog(f"Gasto {gasto.identificador}", width="small")
         def ventana() -> None:
             """Contenido de la pantalla de resolucion."""
-            Componentes.pantalla_resolucion(
-                gasto, veredicto, decision, self._politica_en_curso()
-            )
+            Componentes.pantalla_resolucion(gasto, veredicto, decision)
 
             if st.button("Cerrar", type="primary", use_container_width=True):
                 st.rerun()

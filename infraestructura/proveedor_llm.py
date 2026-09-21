@@ -70,6 +70,15 @@ class ProveedorCompatibleOpenAI(ProveedorLLM):
     # Un veredicto sobre una politica deberia ser reproducible.
     TEMPERATURA = 0.1
 
+    # Techo de tokens de salida. Se fija de forma explicita porque el limite
+    # implicito de cada proveedor es distinto y, cuando se queda corto, la
+    # respuesta llega cortada a media frase: el JSON deja de ser valido y la
+    # evaluacion entera se degrada a revision sin que nada indique el motivo.
+    # Con diez gastos la respuesta ronda los 1.500 tokens, asi que 4.000 deja
+    # margen para un fichero mas grande sin encarecer las llamadas normales,
+    # que solo consumen lo que realmente escriben.
+    MAXIMO_TOKENS_DE_SALIDA = 4000
+
     def __init__(self, configuracion: ConfiguracionLLM) -> None:
         """Construye el cliente con las credenciales indicadas."""
         self._configuracion = configuracion
@@ -147,6 +156,7 @@ class ProveedorCompatibleOpenAI(ProveedorLLM):
         parametros = {
             "model": self._configuracion.modelo,
             "temperature": self.TEMPERATURA,
+            "max_tokens": self.MAXIMO_TOKENS_DE_SALIDA,
             "messages": mensajes,
         }
 

@@ -137,7 +137,8 @@ class ServicioEvaluacion:
         return "\n\n".join(bloques)
 
     def _evaluar_conjunto(
-        self, politica: Politica, gastos: ConjuntoGastos, hechos: str = ""
+        self, politica: Politica, gastos: ConjuntoGastos, hechos: str = "",
+        es_repesca: bool = False,
     ) -> ResultadoEvaluacion:
         """
         Evalua un conjunto de gastos, dividiendolo si el proveedor lo rechaza.
@@ -172,9 +173,62 @@ class ServicioEvaluacion:
 
             return self._evaluar_por_mitades(politica, gastos, hechos)
 
-        return self._analizador.analizar(
+        resultado = self._analizador.analizar(
             texto, gastos, self._proveedor.nombre_modelo
         )
+
+        # Una repesca no vuelve a repescarse: si el segundo intento tampoco
+        # devuelve el gasto, se acepta el hueco y se deja constancia en
+        # pantalla. Insistir mas convertiria un fallo puntual del modelo en una
+        # espera larga delante de la clase.
+        if es_repesca:
+            return resultado
+
+        return self._repescar_ausentes(politica, gastos, hechos, resultado)
+
+    def _repescar_ausentes(
+        self, politica: Politica, gastos: ConjuntoGastos, hechos: str,
+        resultado: ResultadoEvaluacion,
+    ) -> ResultadoEvaluacion:
+        """
+        Vuelve a pedir los gastos que el modelo dejo sin evaluar.
+
+        Un modelo puede devolver una lista incompleta: se salta un apunte, o
+        corta la respuesta antes de terminarla. Hasta ahora esos huecos se
+        rellenaban con una revision cuyo motivo era "El modelo no devolvio
+        veredicto para este gasto", un texto que no dice nada al alumno y que
+        ademas le llegaba como si fuera el razonamiento del agente.
+
+        La reparacion es barata y merece la pena: se vuelve a preguntar, pero
+        solo por los gastos que faltan. El prompt resultante es mucho mas corto
+        que el original, de modo que el fallo mas probable -haberse quedado sin
+        espacio de salida- desaparece por si solo. Si la segunda llamada falla
+        por cualquier motivo, se conserva el resultado original: la reparacion
+        es un extra y nunca debe empeorar lo que ya se tenia.
+        """
+        ausentes = self._analizador.identificadores_sin_respuesta(resultado)
+        if not ausentes:
+            return resultado
+
+        pendientes = ConjuntoGastos(
+            [g for g in gastos if g.identificador in set(ausentes)]
+        )
+
+        try:
+            segundo = self._evaluar_conjunto(
+                politica, pendientes, hechos, es_repesca=True
+            )
+        except ErrorProveedorLLM:
+            return resultado
+
+        # Solo se sustituyen los huecos por veredictos que esta vez si vienen
+        # del modelo. Un hueco que sigue siendo hueco se deja como estaba.
+        nuevos_huecos = set(self._analizador.identificadores_sin_respuesta(segundo))
+        for identificador, veredicto in segundo.veredictos.items():
+            if identificador not in nuevos_huecos:
+                resultado.anadir(veredicto)
+
+        return resultado
 
     def _evaluar_por_mitades(
         self, politica: Politica, gastos: ConjuntoGastos, hechos: str = ""

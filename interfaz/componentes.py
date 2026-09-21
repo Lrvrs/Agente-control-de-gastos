@@ -7,14 +7,9 @@ from typing import List
 
 import streamlit as st
 
-from dominio.correo import CorreoSimulado, describir_contraste_de_fechas
+from dominio.correo import CorreoSimulado
 from dominio.gasto import ConjuntoGastos
-from dominio.veredicto import (
-    Correccion,
-    ResultadoEvaluacion,
-    TipoVeredicto,
-    corregir_decision,
-)
+from dominio.veredicto import Correccion, corregir_decision
 from interfaz.estilos import Paleta
 
 
@@ -31,13 +26,6 @@ class Componentes:
     # este orden y se usa el primero que exista.
     NOMBRES_LOGOTIPO = ("logo-esic.png", "logo-esic.svg", "logo-esic.jpg")
 
-    # Color asociado a cada veredicto, para el distintivo de la tabla.
-    COLOR_POR_VEREDICTO = {
-        TipoVeredicto.APROBADO: Paleta.VERDE,
-        TipoVeredicto.DENEGADO: Paleta.ROJO,
-        TipoVeredicto.PARCIAL: Paleta.AMBAR,
-        TipoVeredicto.REVISION: Paleta.MORADO,
-    }
 
     @staticmethod
     def imagen_a_ancho_completo(contenedor, ruta: str) -> None:
@@ -166,7 +154,7 @@ class Componentes:
         """Pinta la fila de encabezados de la lista de gastos."""
         # Los rotulos se reparten sobre las mismas columnas que las filas de
         # datos, de modo que todo queda alineado sin usar una tabla HTML.
-        titulos = ["Id", "Gasto", "Importe", "Agente", "Tu decisión", "", "", ""]
+        titulos = ["Id", "Gasto", "Importe", "Tu decisión", "", "", ""]
         for columna, titulo in zip(columnas, titulos):
             with columna:
                 st.markdown(
@@ -205,21 +193,6 @@ class Componentes:
         st.markdown(
             f'<div class="mono" style="padding-top:6px">'
             f'{gasto.importe:.2f} {escape(gasto.moneda)}</div>',
-            unsafe_allow_html=True,
-        )
-
-    @staticmethod
-    def celda_veredicto(veredicto) -> None:
-        """Pinta el distintivo del veredicto del agente y su clausula."""
-        color = Componentes.COLOR_POR_VEREDICTO[veredicto.tipo]
-        st.markdown(
-            f'<div style="padding-top:4px">'
-            f'  <span class="distintivo" '
-            f'        style="background:{color}1A;color:{color}">'
-            f'    {escape(veredicto.tipo.value)}</span><br>'
-            f'  <span class="celda-meta">cláusula '
-            f'{escape(veredicto.clausula)}</span>'
-            f'</div>',
             unsafe_allow_html=True,
         )
 
@@ -320,82 +293,55 @@ class Componentes:
     # Clase CSS, icono, titulo y coletilla de cada desenlace. El texto del
     # detalle se completa en la pantalla con el veredicto del agente, que es el
     # dato que el alumno necesita para situar su propia respuesta.
+    # Clase CSS, icono y titulo de cada desenlace. No se nombra el tipo de
+    # veredicto: al alumno se le dice si acerto, y el porque va en la frase del
+    # motivo. Los nombres internos -APROBADO, PARCIAL, REVISION- pertenecen al
+    # agente y no aportan nada a quien esta aprendiendo a supervisarlo.
     TEXTOS_CORRECCION = {
-        Correccion.ACERTADA: (
-            "correccion-acertada", "\u2713", "Correcto",
-            "y tu decisión coincide.",
-        ),
-        Correccion.FALLADA: (
-            "correccion-fallada", "\u2717", "Incorrecto",
-            "y tu decisión fue la contraria.",
-        ),
+        Correccion.ACERTADA: ("correccion-acertada", "\u2713", "Correcto"),
+        Correccion.FALLADA: ("correccion-fallada", "\u2717", "Incorrecto"),
         Correccion.MATIZADA: (
-            "correccion-matizada", "!", "Ni sí ni no",
-            "porque el gasto no se cierra con un sí o un no.",
+            "correccion-matizada", "!", "Ni correcto ni incorrecto",
         ),
     }
 
     @staticmethod
-    def pantalla_resolucion(gasto, veredicto, decision: str, politica) -> None:
+    def pantalla_resolucion(gasto, veredicto, decision: str) -> None:
         """
-        Corrige la decision del alumno citando la politica que la resuelve.
+        Dice al alumno si acerto y por que, en una sola caja.
 
-        La ventana es deliberadamente corta. El alumno acaba de pulsar un boton
-        y lo que necesita saber cabe en tres golpes de vista: si acerto, que
-        dice la politica y por que el agente lo resolvio asi. La ficha del
-        apunte, que antes ocupaba la mitad inferior, se ha retirado: el alumno
-        tiene el gasto delante en la fila desde la que ha pulsado, de modo que
-        repetirlo aqui solo alargaba la lectura.
+        La ventana se ha reducido a lo minimo por una razon de ritmo de clase:
+        se abre y se cierra decenas de veces en una sesion, una por cada gasto
+        que alguien revisa. Todo lo que no sea el veredicto sobre su respuesta
+        y la frase que lo sostiene alarga esa operacion sin anadir nada, porque
+        el gasto lo tiene delante en la fila desde la que ha pulsado y la
+        politica la tiene en el cuadro de texto de la misma pagina.
 
-        El orden -correccion, clausula, motivo- responde a lo que acaba de
-        ocurrir. Si el razonamiento fuera primero, la mitad del aula lo saltaria
-        para buscar el resultado y la otra mitad lo leeria ya sabiendo la
-        respuesta.
+        Tampoco se nombra el tipo de veredicto del agente. APROBADO, PARCIAL o
+        REVISION son etiquetas internas del sistema; lo que el alumno necesita
+        saber es si su decision se sostiene y con que argumento.
         """
         correccion = corregir_decision(veredicto, decision)
 
-        # Franja de correccion. Solo aparece si el alumno se ha pronunciado.
-        if correccion is not None:
-            clase, icono, titulo, coletilla = Componentes.TEXTOS_CORRECCION[correccion]
-
-            # Se nombra siempre la resolucion del agente, tambien cuando el
-            # alumno ha acertado: sin ella, "correcto" no dice en que quedo el
-            # expediente, que es justo lo que hay que recordar despues.
-            detalle = f"El agente resolvió {veredicto.tipo.value} {coletilla}"
-
+        # Sin decision no hay nada que corregir. No deberia ocurrir, porque la
+        # pantalla se abre justo despues de pulsar, pero se contempla para que
+        # una sesion en un estado raro no deje un hueco sin explicacion.
+        if correccion is None:
             st.markdown(
-                f'<div class="correccion {clase}">'
-                f'  <div class="correccion-icono">{icono}</div>'
-                f'  <div>'
-                f'    <div class="correccion-titulo">{escape(titulo)}</div>'
-                f'    <div class="correccion-detalle">{escape(detalle)}</div>'
-                f'  </div>'
-                f'</div>',
+                f'<div class="resolucion-texto">{escape(veredicto.motivo)}</div>',
                 unsafe_allow_html=True,
             )
+            return
 
-        # Clausula aplicada, citada literalmente de la politica que el alumno
-        # tiene en pantalla. Es la parte que convierte la correccion en algo
-        # discutible: no se le dice que se ha equivocado, se le enseña la regla
-        # con la que se le corrige para que pueda no estar de acuerdo.
-        literal = politica.texto_de_clausula(veredicto.clausula) if politica else ""
-        cita = literal or veredicto.clausula
-        if cita:
-            st.markdown(
-                f'<div class="etiqueta-seccion">Según la política de viajes</div>'
-                f'<div class="clausula-cita">{escape(cita)}</div>',
-                unsafe_allow_html=True,
-            )
-
-        # Razonamiento del agente. El contraste de fechas, cuando existe, se
-        # separa del resto porque suele ser el dato que decide la resolucion.
-        contraste = describir_contraste_de_fechas(gasto, veredicto)
-        bloque = escape(veredicto.motivo)
-        if contraste:
-            bloque += f'<span class="resolucion-fechas">{escape(contraste)}</span>'
+        clase, icono, titulo = Componentes.TEXTOS_CORRECCION[correccion]
 
         st.markdown(
-            f'<div class="etiqueta-seccion">Por qué</div>'
-            f'<div class="resolucion-texto">{bloque}</div>',
+            f'<div class="correccion {clase}">'
+            f'  <div class="correccion-icono">{icono}</div>'
+            f'  <div>'
+            f'    <div class="correccion-titulo">{escape(titulo)}</div>'
+            f'    <div class="correccion-detalle">{escape(veredicto.motivo)}</div>'
+            f'  </div>'
+            f'</div>',
             unsafe_allow_html=True,
         )

@@ -19,6 +19,21 @@ class AnalizadorRespuesta:
     mitad de la clase, asi que todas se degradan a un resultado utilizable.
     """
 
+    # Motivo con el que se rellena un gasto que el modelo dejo sin evaluar. Es
+    # una constante y no un texto suelto porque el servicio lo usa para saber
+    # que huecos hay que volver a pedir: sin una marca reconocible, un hueco es
+    # indistinguible de una revision legitima.
+    MOTIVO_SIN_RESPUESTA = "El modelo no devolvió veredicto para este gasto."
+
+    @classmethod
+    def identificadores_sin_respuesta(cls, resultado) -> list:
+        """Devuelve los gastos que quedaron sin veredicto real del modelo."""
+        return [
+            identificador
+            for identificador, veredicto in resultado.veredictos.items()
+            if veredicto.motivo == cls.MOTIVO_SIN_RESPUESTA
+        ]
+
     def analizar(
         self, texto_respuesta: str, gastos: ConjuntoGastos, nombre_modelo: str
     ) -> ResultadoEvaluacion:
@@ -145,6 +160,6 @@ class AnalizadorRespuesta:
                         identificador_gasto=gasto.identificador,
                         tipo=TipoVeredicto.REVISION,
                         clausula="sin indicar",
-                        motivo="El modelo no devolvió veredicto para este gasto.",
+                        motivo=self.MOTIVO_SIN_RESPUESTA,
                     )
                 )

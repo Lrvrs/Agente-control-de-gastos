@@ -68,10 +68,18 @@ class ServicioEvaluacion:
         self._analizador = analizador or AnalizadorRespuesta()
 
     def evaluar(
-        self, politica: Politica, gastos: ConjuntoGastos
+        self, politica: Politica, gastos: ConjuntoGastos,
+        usar_cache: bool = True,
     ) -> ResultadoEvaluacion:
         """
         Evalua los gastos contra la politica y devuelve el resultado.
+
+        Con usar_cache a falso se salta la consulta a la cache y se llama al
+        modelo aunque haya una respuesta guardada para esa misma politica. El
+        resultado nuevo si se guarda, sustituyendo al anterior. Sirve para
+        repetir una evaluacion sin tener que alterar la politica, que es lo
+        unico que cambiaba la clave y obligaba a modificar el texto para forzar
+        una llamada.
 
         Puede lanzar ErrorProveedorLLM si el modelo no responde; la interfaz es
         responsable de traducir ese error a un mensaje comprensible.
@@ -80,7 +88,11 @@ class ServicioEvaluacion:
 
         # Paso 1: cache. Es el camino mas frecuente al principio de la clase,
         # cuando todos evaluan con la politica por defecto sin haberla tocado.
-        resultado_en_cache = self._cache.obtener(politica.huella, huella_gastos)
+        resultado_en_cache = (
+            self._cache.obtener(politica.huella, huella_gastos)
+            if usar_cache
+            else None
+        )
         if resultado_en_cache is not None:
             # Se devuelve una copia marcada como procedente de cache para que la
             # interfaz pueda indicarlo sin alterar la entrada almacenada.

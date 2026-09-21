@@ -68,7 +68,9 @@ class VistaPrincipal:
         # reejecutados de script y se comparta entre todas las sesiones, que es
         # justamente lo que permite que la primera evaluacion del aula sirva
         # para todos los alumnos que no hayan tocado la politica.
-        self._cache = VistaPrincipal._obtener_cache_compartida(firma_estructural())
+        self._cache = VistaPrincipal._obtener_cache_compartida(
+            firma_estructural(), VistaPrincipal._huella_del_codigo()
+        )
 
         # El buscador tambien se comparte entre sesiones, porque su cache
         # interna es lo que hace viable el uso en aula: treinta alumnos
@@ -83,14 +85,20 @@ class VistaPrincipal:
 
     @staticmethod
     @st.cache_resource
-    def _obtener_cache_compartida(firma: str) -> CacheEvaluaciones:
+    def _obtener_cache_compartida(firma: str, huella: str) -> CacheEvaluaciones:
         """Devuelve la unica instancia de cache del proceso."""
         # El decorador garantiza que Streamlit construye el objeto una sola vez
         # y devuelve siempre la misma referencia a todas las sesiones.
         #
-        # La firma estructural forma parte de la clave a proposito: al cambiar
-        # la forma de las entidades, Streamlit construye una cache nueva y
-        # descarta la anterior, que contendria objetos de la version antigua.
+        # La clave tiene dos partes y ninguna sobra. La firma estructural
+        # descarta la cache cuando cambia la forma de las entidades, que de otro
+        # modo dejaria objetos de una version anterior en memoria. La huella del
+        # codigo la descarta cuando cambia cualquier fichero fuente, y eso
+        # incluye el prompt: una respuesta guardada se obtuvo con las
+        # instrucciones de entonces, de modo que reutilizarla despues de
+        # cambiarlas equivale a no haber cambiado nada. Ese fue exactamente el
+        # motivo por el que arreglar el prompt no se notaba hasta editar la
+        # politica, que era lo unico que movia la clave.
         return CacheEvaluaciones()
 
     @staticmethod
@@ -463,8 +471,25 @@ class VistaPrincipal:
             if not self._control_uso.puede_evaluar:
                 st.warning("Has agotado tu cupo de evaluaciones en esta sesión.")
 
-        if pulsado:
-            self._ejecutar_evaluacion(gastos)
+        # Segundo boton, discreto y solo cuando ya hay un resultado en
+        # pantalla: repite la evaluacion llamando al modelo aunque la politica
+        # no haya cambiado. Evita el apaño de tener que tocar una letra del
+        # texto para que la clave de la cache se mueva.
+        hay_resultado = st.session_state[self.CLAVE_RESULTADO_ACTUAL] is not None
+        repetir = False
+        if hay_resultado:
+            with columna_aviso:
+                repetir = st.button(
+                    "Volver a evaluar",
+                    help=(
+                        "Llama otra vez al modelo sin reutilizar la respuesta "
+                        "guardada. Consume una evaluación de tu cupo."
+                    ),
+                    disabled=not self._control_uso.puede_evaluar,
+                )
+
+        if pulsado or repetir:
+            self._ejecutar_evaluacion(gastos, usar_cache=not repetir)
 
     def _renderizar_resultados(self, gastos: ConjuntoGastos) -> None:
         """Pinta la tabla de veredictos y el recuento, si ya hay resultados."""
@@ -527,7 +552,9 @@ class VistaPrincipal:
     # Acciones
     # ------------------------------------------------------------------
 
-    def _ejecutar_evaluacion(self, gastos: ConjuntoGastos) -> None:
+    def _ejecutar_evaluacion(
+        self, gastos: ConjuntoGastos, usar_cache: bool = True
+    ) -> None:
         """Lanza la evaluacion y guarda el resultado en el estado de sesion."""
         try:
             politica = self._politica_en_curso()
@@ -556,7 +583,7 @@ class VistaPrincipal:
             "El agente está verificando los datos y aplicando tu política..."
         ):
             try:
-                resultado = servicio.evaluar(politica, gastos)
+                resultado = servicio.evaluar(politica, gastos, usar_cache)
             except ErrorProveedorLLM as error:
                 # Se distingue la saturacion del resto para poder sugerir la
                 # accion correcta, que en ese caso es sencillamente esperar.

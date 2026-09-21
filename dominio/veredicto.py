@@ -5,6 +5,23 @@ from enum import Enum
 from typing import Dict, List
 
 
+# Raices con las que se reconoce cada tipo de veredicto cuando el modelo no
+# devuelve la palabra exacta. Vive fuera del enumerado y no dentro de el porque
+# Enum convierte en miembro cualquier atributo de clase que no sea un
+# descriptor: declarada dentro, esta tupla se intentaba registrar como un quinto
+# veredicto y la clase no llegaba a construirse.
+#
+# El orden importa y no es alfabetico: "APROBADO PARCIALMENTE" contiene las
+# raices de dos tipos, y de los dos el que describe el caso es PARCIAL, asi que
+# se comprueba antes.
+RAICES_DE_VEREDICTO = (
+    ("PARCIAL", ("PARCIAL",)),
+    ("DENEGADO", ("DENEG", "RECHAZ", "NO REEMBOLS")),
+    ("APROBADO", ("APROB", "ACEPT", "PROCEDE")),
+    ("REVISION", ("REVIS", "ESCAL", "PENDIENTE", "SUPERVIS")),
+)
+
+
 class TipoVeredicto(str, Enum):
     """
     Los cuatro desenlaces posibles para un gasto.
@@ -32,15 +49,36 @@ class TipoVeredicto(str, Enum):
         """
         Convierte el texto devuelto por el modelo en un valor del enumerado.
 
-        Cualquier valor no reconocido se degrada a REVISION en lugar de provocar
-        un error: si el modelo responde algo inesperado, lo correcto es pedir
-        supervision humana, no romper la pantalla del alumno.
+        Se admite algo mas que la coincidencia exacta, y es a proposito. Aunque
+        el prompt pide una de cuatro palabras, un modelo matiza con facilidad:
+        devuelve "APROBADO CON EXCEPCIÓN" cuando el gasto procede por una
+        excepcion de la politica, o "aprobado" en minusculas. Con coincidencia
+        exacta todas esas respuestas caian en REVISION, y el efecto era el peor
+        posible: el motivo explicaba que el gasto estaba dentro de limites
+        mientras la aplicacion lo trataba como no resuelto, de modo que el
+        alumno que lo aprobaba recibia un "incorrecto" contradicho por el texto
+        que tenia justo debajo.
+
+        Lo que no se reconoce sigue degradandose a REVISION, que es la salida
+        prudente: pedir supervision humana en lugar de romper la pantalla.
         """
-        # Se normaliza a mayusculas y sin espacios para tolerar "aprobado ".
         candidato = (texto or "").strip().upper()
+
+        # Coincidencia exacta primero: es el caso normal y no conviene que una
+        # heuristica se interponga cuando el modelo ha respondido bien.
         for miembro in cls:
             if miembro.value == candidato:
                 return miembro
+
+        # Se retiran los acentos para que "REVISIÓN" case con la raiz "REVIS".
+        sin_acentos = candidato.translate(
+            str.maketrans("ÁÉÍÓÚÜÑ", "AEIOUUN")
+        )
+
+        for nombre, raices in RAICES_DE_VEREDICTO:
+            if any(raiz in sin_acentos for raiz in raices):
+                return cls(nombre)
+
         return cls.REVISION
 
 

@@ -58,7 +58,26 @@ contrastando el dato del apunte con el dato verificado. No basta con decir \
 que no cumple: di qué dice el apunte y qué dice la comprobación. Por ejemplo, \
 "la factura es del 22 de septiembre y esa feria se celebró del 9 al 11 de \
 junio" en lugar de "las fechas no coinciden con el evento".
-Debes incluir un elemento por cada gasto recibido, sin omitir ninguno."""
+Debes incluir un elemento por cada gasto recibido, sin omitir ninguno.
+
+FORMATO DE RESPUESTA
+
+Responde únicamente con un objeto JSON con esta forma exacta:
+
+{"veredictos": [{"id": "G-001", "veredicto": "APROBADO", "clausula": "12", \
+"motivo": "frase breve", "evento": "TECMA", "evento_desde": "2026-06-09", \
+"evento_hasta": "2026-06-11"}]}
+
+El campo veredicto admite exactamente uno de estos cuatro valores, en \
+mayúsculas y sin ningún añadido: APROBADO, DENEGADO, PARCIAL, REVISION. No \
+escribas "APROBADO CON EXCEPCIÓN", "aprobado parcialmente" ni ninguna otra \
+variante: si el gasto procede por una excepción de la política, el veredicto \
+es APROBADO y la excepción se explica en el motivo.
+
+Los tres campos de evento son opcionales. Inclúyelos solo cuando la \
+resolución dependa de un evento que aparezca en HECHOS VERIFICADOS, con las \
+fechas en formato AAAA-MM-DD tal y como figuren allí. Si no has podido \
+verificar el evento, omítelos."""
 
     def construir_instruccion_sistema(self) -> str:
         """Devuelve la instruccion de sistema, identica en todas las llamadas."""

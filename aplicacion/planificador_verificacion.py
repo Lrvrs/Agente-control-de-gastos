@@ -26,7 +26,7 @@ class PlanificadorVerificacion:
     # Tope de consultas por evaluación. Protege la cuota del servicio de
     # búsqueda y, sobre todo, acota el tamaño del contexto de la segunda
     # llamada, que es lo que desbordaba con los sistemas de caja negra.
-    MAXIMO_CONSULTAS = 6
+    MAXIMO_CONSULTAS = 8
 
     INSTRUCCION = """\
 Eres la primera fase de un agente de control de gastos. Todavía no resuelves \

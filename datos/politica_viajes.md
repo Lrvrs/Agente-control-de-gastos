@@ -29,15 +29,28 @@
 
 9. **Duplicidad.** No se reembolsará dos veces el mismo gasto.
 
+10. **Establecimientos.** Solo son reembolsables las comidas realizadas en
+    establecimientos de restauración. Los importes consumidos en locales de
+    ocio nocturno no son reembolsables, con independencia de quién asistiera y
+    del motivo que se alegue.
+
+11. **Localización.** El establecimiento en el que se produce el gasto debe
+    encontrarse en la ciudad de destino del desplazamiento. Si se encuentra en
+    otra localidad, el gasto requiere autorización expresa del responsable.
+
+12. **Días no laborables.** Las comidas con cliente celebradas en sábado,
+    domingo o día festivo en la localidad de destino requieren autorización
+    expresa del responsable.
+
 ## Verificación
 
-11. **Hechos externos.** Cuando la justificación de un gasto se apoye en un
+13. **Hechos externos.** Cuando la justificación de un gasto se apoye en un
     hecho externo comprobable —la celebración de una feria o congreso, la
     existencia de una empresa, la naturaleza de un establecimiento o una
     ubicación—, dicho hecho deberá verificarse antes de resolver. Si no puede
     confirmarse, el gasto se someterá a revisión.
 
-12. **Excepción por evento.** Los límites de alojamiento podrán superarse
+14. **Excepción por evento.** Los límites de alojamiento podrán superarse
     hasta un 60 % cuando la estancia coincida con una feria o congreso
     profesional celebrado en la ciudad de destino y la fecha del gasto esté
     comprendida entre las fechas de celebración del evento.

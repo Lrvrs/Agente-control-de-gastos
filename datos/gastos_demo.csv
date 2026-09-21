@@ -1,11 +1,9 @@
 id,empleado,fecha,categoria,ciudad,importe,moneda,descripcion,justificante
-G-001,Luis Pardo,2026-09-04,dietas,Barcelona,78.00,EUR,Cena de trabajo,S
-G-002,Luis Pardo,2026-09-04,dietas,Barcelona,78.00,EUR,Cena de trabajo con Elena Soto directora de compras de Nortek para cerrar la renovación del contrato,S
-G-003,Marta Gil,2026-09-05,dietas,Sevilla,28.00,EUR,Comida de trabajo en La Tasquita,N
-G-004,Marta Gil,2026-09-05,dietas,Sevilla,29.00,EUR,Comida de trabajo en La Tasquita,N
-G-005,Jorge Sanz,2026-09-10,transporte,Madrid,64.00,EUR,Taxi desde la calle Serrano hasta la estación de Atocha; no había alternativa de transporte público,S
-G-006,Marta Gil,2026-09-12,dietas,Sevilla,86.00,EUR,Comida con el equipo de compras de Alvasa para presentar la nueva gama,S
-G-007,Clara Vega,2026-09-14,dietas,Madrid,145.00,EUR,Cena de trabajo en Zalacaín con dos representantes de Telefónica,S
-E-001,Ana Ruiz,2026-06-10,alojamiento,Madrid,210.00,EUR,"Hotel una noche durante TECMA, Feria Internacional de Urbanismo y Medio Ambiente",S
-E-002,Ana Ruiz,2026-09-22,alojamiento,Madrid,210.00,EUR,"Hotel una noche durante TECMA, Feria Internacional de Urbanismo y Medio Ambiente",S
-E-003,Clara Vega,2026-06-11,alojamiento,Bilbao,190.00,EUR,Hotel una noche durante la Feria Internacional del Calzado de Bilbao,S
+G-01,Marta Gil,2026-06-10,alojamiento,Madrid,210.00,EUR,Hotel una noche durante TECMA Feria Internacional del Urbanismo y Medio Ambiente en IFEMA,S
+G-02,Jorge Sanz,2026-04-21,representación,Madrid,168.00,EUR,Cena de trabajo con el equipo de Indra en Teatro Kapital; cuatro comensales,S
+G-03,Luis Pardo,2026-03-12,representación,Madrid,246.00,EUR,Comida con dos responsables de compras de Iberdrola en Sobrino de Botín; tres comensales,S
+G-04,Clara Vega,2026-02-18,representación,Valencia,170.00,EUR,Comida de trabajo en Arzak con el responsable de operaciones de Mercadona; dos comensales,S
+G-05,Jorge Sanz,2026-07-09,transporte,Barcelona,89.00,EUR,Billete de tren Madrid-Barcelona en clase turista trayecto de ida,S
+G-06,Marta Gil,2026-09-03,representación,Bilbao,140.00,EUR,Comida con el director de compras de Torrelaya Sistemas para cerrar la renovación del contrato; dos comensales,S
+G-07,Clara Vega,2026-04-22,dietas,Sevilla,38.00,EUR,Cena individual durante desplazamiento a Sevilla,S
+G-08,Luis Pardo,2026-05-15,representación,Madrid,120.00,EUR,Comida con el equipo de Telefónica para revisar el plan anual; dos comensales,S

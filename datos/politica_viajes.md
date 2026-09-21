@@ -18,39 +18,36 @@
 
 6. **Alcohol.** Las bebidas alcohólicas no son reembolsables en ningún caso.
 
-7. **Antigüedad.** Los gastos presentados más de 15 días después de la fecha en
-   que se produjeron requieren autorización expresa del responsable.
-
 ## Conducta
 
-8. **Fraccionamiento.** No se reembolsarán gastos que hayan sido divididos en
+7. **Fraccionamiento.** No se reembolsarán gastos que hayan sido divididos en
    varios apuntes con la finalidad de eludir los límites establecidos o la
    obligación de aportar justificante.
 
-9. **Duplicidad.** No se reembolsará dos veces el mismo gasto.
+8. **Duplicidad.** No se reembolsará dos veces el mismo gasto.
 
-10. **Establecimientos.** Solo son reembolsables las comidas realizadas en
-    establecimientos de restauración. Los importes consumidos en locales de
-    ocio nocturno no son reembolsables, con independencia de quién asistiera y
-    del motivo que se alegue.
+9. **Establecimientos.** Solo son reembolsables las comidas realizadas en
+   establecimientos de restauración. Los importes consumidos en locales de
+   ocio nocturno no son reembolsables, con independencia de quién asistiera y
+   del motivo que se alegue.
 
-11. **Localización.** El establecimiento en el que se produce el gasto debe
-    encontrarse en la ciudad de destino del desplazamiento. Si se encuentra en
-    otra localidad, el gasto requiere autorización expresa del responsable.
+10. **Localización.** El establecimiento en el que se produce el gasto debe
+   encontrarse en la ciudad de destino del desplazamiento. Si se encuentra en
+   otra localidad, el gasto requiere autorización expresa del responsable.
 
-12. **Días no laborables.** Las comidas con cliente celebradas en sábado,
-    domingo o día festivo en la localidad de destino requieren autorización
-    expresa del responsable.
+11. **Días no laborables.** Las comidas con cliente celebradas en sábado,
+   domingo o día festivo en la localidad de destino requieren autorización
+   expresa del responsable.
 
 ## Verificación
 
-13. **Hechos externos.** Cuando la justificación de un gasto se apoye en un
-    hecho externo comprobable —la celebración de una feria o congreso, la
-    existencia de una empresa, la naturaleza de un establecimiento o una
-    ubicación—, dicho hecho deberá verificarse antes de resolver. Si no puede
-    confirmarse, el gasto se someterá a revisión.
+12. **Hechos externos.** Cuando la justificación de un gasto se apoye en un
+   hecho externo comprobable —la celebración de una feria o congreso, la
+   existencia de una empresa, la naturaleza de un establecimiento o una
+   ubicación—, dicho hecho deberá verificarse antes de resolver. Si no puede
+   confirmarse, el gasto se someterá a revisión.
 
-14. **Excepción por evento.** Los límites de alojamiento podrán superarse
-    hasta un 60 % cuando la estancia coincida con una feria o congreso
-    profesional celebrado en la ciudad de destino y la fecha del gasto esté
-    comprendida entre las fechas de celebración del evento.
+13. **Excepción por evento.** Los límites de alojamiento podrán superarse
+   hasta un 60 % cuando la estancia coincida con una feria o congreso
+   profesional celebrado en la ciudad de destino y la fecha del gasto esté
+   comprendida entre las fechas de celebración del evento.

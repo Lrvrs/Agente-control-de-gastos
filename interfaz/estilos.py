@@ -151,6 +151,18 @@ class GestorEstilos:
         /* Espacio reservado para el banner que se disenara mas adelante.
            Se deja como marcador visible para que no se olvide, y se sustituye
            por una imagen cambiando unicamente el componente que lo pinta. */
+        /* Franja del banner. Se estiliza por el contenedor de imagen de
+           Streamlit y no por una clase propia: el div que se escribe con
+           markdown se cierra solo al sanearse el HTML, de modo que no llega a
+           envolver a la imagen y cualquier selector que dependa de esa
+           anidacion falla en silencio. El margen inferior iguala al del
+           marcador, para que poner o quitar la imagen no mueva la pagina. */
+        [data-testid="stImage"] img {{
+            border-radius: 14px; display: block;
+        }}
+
+        .banner {{ margin-bottom: 26px; }}
+
         .banner-hueco {{
             height: 104px; border-radius: 14px; margin-bottom: 26px;
             border: 1.5px dashed {Paleta.BORDE};

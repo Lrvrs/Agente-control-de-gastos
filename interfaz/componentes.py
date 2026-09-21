@@ -26,6 +26,11 @@ class Componentes:
     # este orden y se usa el primero que exista.
     NOMBRES_LOGOTIPO = ("logo-esic.png", "logo-esic.svg", "logo-esic.jpg")
 
+    # Nombres de fichero admitidos para el banner de cabecera, en orden de
+    # preferencia. Se busca el primero que exista, de modo que sustituir el
+    # banner es cuestion de dejar otro fichero en la carpeta de activos.
+    NOMBRES_BANNER = ("banner.jpg", "banner.png", "banner.webp")
+
 
     @staticmethod
     def imagen_a_ancho_completo(contenedor, ruta: str) -> None:
@@ -56,12 +61,29 @@ class Componentes:
     @staticmethod
     def banner_superior() -> None:
         """
-        Pinta el espacio reservado para el banner de cabecera.
+        Pinta el banner de cabecera, o el hueco reservado si no hay imagen.
 
-        Se deja como marcador visible y no como hueco en blanco para que sea
-        evidente que el espacio esta reservado a proposito. Sustituirlo por la
-        imagen definitiva afecta solo a este metodo.
+        Se resuelve por presencia de fichero y no por configuracion: dejar una
+        imagen llamada banner.jpg en la carpeta de activos la pone en la
+        cabecera, y retirarla devuelve el marcador. Asi el banner se puede
+        cambiar antes de una clase sin tocar el codigo ni volver a desplegar
+        nada mas que el fichero.
         """
+        carpeta_activos = Path(__file__).resolve().parent.parent / "activos"
+
+        for nombre in Componentes.NOMBRES_BANNER:
+            candidato = carpeta_activos / nombre
+            if candidato.exists():
+                # El contenedor recorta la imagen a la altura de la franja y
+                # conserva su proporcion, de modo que un banner mas alto o mas
+                # bajo que el previsto no descuadra la pagina.
+                st.markdown('<div class="banner">', unsafe_allow_html=True)
+                Componentes.imagen_a_ancho_completo(st, str(candidato))
+                st.markdown('</div>', unsafe_allow_html=True)
+                return
+
+        # Sin imagen se mantiene el marcador, que deja claro que el espacio
+        # esta reservado a proposito y no es un hueco olvidado.
         st.markdown(
             '<div class="banner-hueco">Espacio reservado para el banner</div>',
             unsafe_allow_html=True,

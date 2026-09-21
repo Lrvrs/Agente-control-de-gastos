@@ -358,14 +358,14 @@ class VistaPrincipal:
         """Pinta la identidad, la navegacion y el pie tecnico."""
         Componentes.marca_lateral()
 
-        # La navegacion es por ahora informativa: la aplicacion tiene una sola
-        # pantalla. Se deja preparada la estructura para cuando se anadan las
-        # rondas del juego de aprobar y denegar.
+        # La aplicacion tiene una sola pantalla, de modo que el menu se reduce
+        # a un rotulo que dice de que va. La entrada "Partida (proximamente)"
+        # se ha retirado: aprobar y denegar ya se hace en esta misma pantalla,
+        # asi que anunciarlo como pendiente describia mal lo que hay y dejaba a
+        # la vista una promesa sin cumplir, que es justo lo que no conviene
+        # ensenar en una demo.
         Componentes.elemento_navegacion(
             "Política", "editar reglas y evaluar", activo=True
-        )
-        Componentes.elemento_navegacion(
-            "Partida", "aprobar o denegar (próximamente)", activo=False
         )
 
         # Dato tecnico de trazabilidad: que modelo esta respondiendo y cuanto

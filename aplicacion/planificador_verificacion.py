@@ -36,8 +36,14 @@ antes de poder decidir sobre estos gastos.
 Un hecho externo es cualquier afirmación de la descripción que no puedas dar \
 por cierta con lo que tienes delante y que sea comprobable en fuentes \
 públicas: que una feria exista y cuándo se celebra, que una empresa sea real, \
-qué clase de establecimiento es un restaurante, qué distancia separa dos \
-lugares o si una zona dispone de transporte público.
+qué clase de establecimiento es un local, en qué ciudad se encuentra, si una \
+fecha es festivo en una localidad concreta, qué distancia separa dos lugares \
+o si una zona dispone de transporte público.
+
+Antes de decidir qué comprobar, lee la política que se incluye más abajo: es \
+ella la que determina qué hechos resultan relevantes. Si una cláusula hace \
+depender su resolución de algo externo, ese algo hay que comprobarlo aunque \
+no figure en esta lista de ejemplos.
 
 No propongas comprobar lo que ya está en los datos: importes, fechas del \
 apunte, categorías o si se aportó justificante. Eso no se busca, se lee.
@@ -57,7 +63,7 @@ Si ningún gasto depende de un hecho externo, devuelve la lista vacía."""
         """Recibe el mismo proveedor que usa el resto de la aplicación."""
         self._proveedor = proveedor
 
-    def planificar(self, gastos: ConjuntoGastos) -> List[str]:
+    def planificar(self, gastos: ConjuntoGastos, politica=None) -> List[str]:
         """
         Devuelve las consultas que el agente considera necesarias.
 
@@ -66,9 +72,13 @@ Si ningún gasto depende de un hecho externo, devuelve la lista vacía."""
         razonable es continuar sin ella y dejar que la segunda pasada resuelva
         con la información de que disponga.
         """
-        # Solo se envían las descripciones y sus identificadores. La política no
-        # hace falta aquí y omitirla abarata mucho esta primera llamada.
-        mensaje = self._componer_mensaje(gastos)
+        # La política viaja también en esta primera llamada. Omitirla abarataba
+        # la petición, pero dejaba la decisión de qué verificar clavada en el
+        # texto de esta instrucción: añadir una cláusula que dependiera de un
+        # hecho nuevo no cambiaba nada en la fase de planificación, y eso
+        # contradice lo que la aplicación promete, que es que el comportamiento
+        # lo decida la política y no el código.
+        mensaje = self._componer_mensaje(gastos, politica)
 
         try:
             respuesta = self._proveedor.completar(self.INSTRUCCION, mensaje)
@@ -77,15 +87,26 @@ Si ningún gasto depende de un hecho externo, devuelve la lista vacía."""
 
         return self._extraer_consultas(respuesta)
 
-    def _componer_mensaje(self, gastos: ConjuntoGastos) -> str:
-        """Compone la lista de descripciones que el modelo debe examinar."""
+    def _componer_mensaje(self, gastos: ConjuntoGastos, politica=None) -> str:
+        """Compone la política y la lista de descripciones que hay que examinar."""
+        # Bloque de política. Es opcional para que el planificador siga siendo
+        # utilizable sin ella, que es como lo ejercitan las pruebas.
+        cabecera = ""
+        if politica is not None:
+            cabecera = (
+                "POLÍTICA DE GASTOS VIGENTE\n"
+                "==========================\n"
+                f"{politica.texto}\n\n"
+            )
+
         lineas = [
             f"{gasto.identificador} | {gasto.fecha} | {gasto.ciudad} | "
             f"{gasto.descripcion}"
             for gasto in gastos
         ]
         return (
-            "GASTOS A EXAMINAR\n"
+            cabecera
+            + "GASTOS A EXAMINAR\n"
             "=================\n"
             "Formato: id | fecha | ciudad | descripción\n\n"
             + "\n".join(lineas)

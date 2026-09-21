@@ -102,7 +102,7 @@ class ServicioEvaluacion:
         # comprobar y la aplicacion ejecuta esas busquedas. Si no hay
         # herramienta configurada, esta fase no hace nada y el bloque de hechos
         # queda vacio, lo que llevara al agente a escalar lo que dependa de uno.
-        hechos = self._verificar_hechos(gastos)
+        hechos = self._verificar_hechos(gastos, politica)
 
         # Paso 3: segunda pasada. Con los hechos en la mano, se emiten los
         # veredictos, partiendo el conjunto si el proveedor lo rechaza por
@@ -115,7 +115,9 @@ class ServicioEvaluacion:
 
         return resultado
 
-    def _verificar_hechos(self, gastos: ConjuntoGastos) -> str:
+    def _verificar_hechos(
+        self, gastos: ConjuntoGastos, politica: Politica | None = None
+    ) -> str:
         """
         Ejecuta la fase de verificacion y devuelve los hechos comprobados.
 
@@ -136,7 +138,7 @@ class ServicioEvaluacion:
             return ""
 
         # El agente decide que necesita mirar. La aplicacion no lo deduce.
-        consultas = self._planificador.planificar(gastos)
+        consultas = self._planificador.planificar(gastos, politica)
         if not consultas:
             return ""
 

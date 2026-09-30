@@ -19,8 +19,22 @@ class ConfiguracionLLM:
     # compatible con la de OpenAI.
     url_base: str
 
-    # Identificador del modelo concreto dentro de ese proveedor.
+    # Identificador del modelo principal dentro de ese proveedor.
     modelo: str
+
+    # Modelos de respaldo, en orden de preferencia, que se prueban cuando el
+    # principal devuelve un 429 que no se resuelve esperando unos segundos.
+    # Incluye al principal en primer lugar. Vacio equivale a solo el principal.
+    modelos: tuple = ()
+
+    @property
+    def lista_de_modelos(self) -> tuple:
+        """Devuelve los modelos a probar, el principal primero y sin repetir."""
+        # Se normaliza aqui y no en quien consume, para que ninguna parte del
+        # proyecto tenga que recordar que una lista vacia significa "solo el
+        # principal".
+        orden = [self.modelo, *self.modelos]
+        return tuple(dict.fromkeys(m for m in orden if m))
 
     @property
     def esta_configurado(self) -> bool:
@@ -153,12 +167,44 @@ class Configuracion:
         nombre_variable = f"{seccion.upper()}_{clave.upper()}"
         return os.environ.get(nombre_variable, por_defecto)
 
+    def _leer_lista(self, seccion: str, clave: str) -> tuple:
+        """
+        Lee un valor que puede ser una lista TOML o texto separado por comas.
+
+        Los secretos de Streamlit admiten listas reales, pero una variable de
+        entorno solo admite texto, asi que se aceptan las dos formas.
+        """
+        bruto = None
+        if self._secretos_disponibles:
+            try:
+                if seccion in st.secrets and clave in st.secrets[seccion]:
+                    bruto = st.secrets[seccion][clave]
+            except Exception:
+                bruto = None
+
+        if bruto is None:
+            bruto = os.environ.get(f"{seccion.upper()}_{clave.upper()}", "")
+
+        if isinstance(bruto, str):
+            bruto = bruto.split(",")
+
+        return tuple(str(m).strip() for m in bruto if str(m).strip())
+
     def _cargar_llm(self) -> ConfiguracionLLM:
         """Construye la configuracion del proveedor a partir de las fuentes."""
+        # `modelos` es la forma nueva y `modelo` se conserva por compatibilidad
+        # con los secretos ya desplegados: si solo esta el segundo, todo sigue
+        # funcionando igual que antes. Si estan los dos, `modelo` manda como
+        # principal y la lista aporta los respaldos.
+        modelos = self._leer_lista("llm", "modelos")
+        modelo = self._leer("llm", "modelo") or (
+            modelos[0] if modelos else self.MODELO_POR_DEFECTO
+        )
         return ConfiguracionLLM(
             clave_api=self._leer("llm", "clave_api"),
             url_base=self._leer("llm", "url_base", self.URL_BASE_POR_DEFECTO),
-            modelo=self._leer("llm", "modelo", self.MODELO_POR_DEFECTO),
+            modelo=modelo,
+            modelos=modelos,
         )
 
     def _cargar_aula(self) -> ConfiguracionAula:

@@ -1,6 +1,10 @@
 """Cliente del modelo de lenguaje, intercambiable entre proveedores."""
 
+import re
+import threading
+import time
 from abc import ABC, abstractmethod
+from typing import Dict
 
 from openai import OpenAI
 
@@ -31,6 +35,43 @@ class ErrorProveedorLLM(Exception):
         # Peticion demasiado grande: reintentar lo mismo no sirve de nada, pero
         # si se parte el trabajo en dos mitades, cada una puede caber.
         self.es_peticion_demasiado_grande = es_peticion_demasiado_grande
+
+
+def segundos_hasta_reintento(detalle: str) -> float | None:
+    """
+    Devuelve los segundos que pide esperar un 429, o None si no los dice.
+
+    Groq los escribe dentro del mensaje ("Please try again in 7.66s", "in
+    1m23.4s", "in 500ms"). Es un port del parser del proyecto Chatpdf, que ya
+    tropezo con la trampa de abajo.
+    """
+    coincidencia = re.search(r"try again in ([0-9hms.]+)", detalle or "", re.I)
+    if not coincidencia:
+        return None
+
+    # El punto final de la frase se cuela en el grupo ("500ms.") y sin quitarlo
+    # la comprobacion de milisegundos no casa: "500m" se leeria como 500
+    # MINUTOS y el modelo quedaria descartado durante horas.
+    texto = coincidencia.group(1).rstrip(".")
+
+    milisegundos = re.fullmatch(r"([\d.]+)ms", texto, re.I)
+    if milisegundos:
+        try:
+            return float(milisegundos.group(1)) / 1000
+        except ValueError:
+            return None
+
+    factor = {"h": 3600, "m": 60, "s": 1}
+    total = 0.0
+    alguna_unidad = False
+    for valor, unidad in re.findall(r"([\d.]+)\s*(h|m|s)", texto, re.I):
+        try:
+            total += float(valor) * factor[unidad.lower()]
+        except ValueError:
+            return None
+        alguna_unidad = True
+
+    return total if alguna_unidad else None
 
 
 class ProveedorLLM(ABC):
@@ -79,9 +120,24 @@ class ProveedorCompatibleOpenAI(ProveedorLLM):
     # que solo consumen lo que realmente escriben.
     MAXIMO_TOKENS_DE_SALIDA = 4000
 
+    # Hasta cuantos segundos se espera para reintentar el MISMO modelo tras un
+    # 429. Mas alla compensa cambiar de modelo: el alumno mira el spinner.
+    ESPERA_MAXIMA_MISMO_MODELO = 4.0
+
+    # Modelos que han devuelto un 429 largo, con el instante (monotonic) en que
+    # vuelven a estar disponibles. Es de clase y no de instancia porque el
+    # proveedor se construye de nuevo en cada evaluacion, y sin memoria comun
+    # cada una volveria a probar primero el modelo agotado y gastaria una
+    # llamada en que se lo repitan. Se guarda un instante y no un booleano
+    # porque Groq dice cuando se repone, y un modelo con el cupo del dia
+    # agotado no debe reintentarse en horas.
+    _enfriamiento: Dict[str, float] = {}
+    _cerrojo_enfriamiento = threading.Lock()
+
     def __init__(self, configuracion: ConfiguracionLLM) -> None:
         """Construye el cliente con las credenciales indicadas."""
         self._configuracion = configuracion
+        self._modelo_usado = ""
 
         # El cliente se crea una sola vez y se reutiliza: abrir una conexion
         # nueva por peticion multiplicaria la latencia percibida.
@@ -104,8 +160,10 @@ class ProveedorCompatibleOpenAI(ProveedorLLM):
 
     @property
     def nombre_modelo(self) -> str:
-        """Identificador del modelo configurado."""
-        return self._configuracion.modelo
+        """Identificador del modelo que respondio, o el principal si aun ninguno."""
+        # Es el que respondio y no el configurado porque, con respaldo, pueden
+        # ser distintos, y la pantalla debe decir quien escribio el veredicto.
+        return self._modelo_usado or self._configuracion.modelo
 
     def completar(self, instruccion_sistema: str, mensaje_usuario: str) -> str:
         """
@@ -151,10 +209,56 @@ class ProveedorCompatibleOpenAI(ProveedorLLM):
         return contenido or ""
 
     def _invocar(self, mensajes: list, pedir_json: bool):
-        """Realiza la llamada al proveedor, con o sin modo JSON."""
+        """
+        Llama al primer modelo disponible y pasa al siguiente ante un 429.
+
+        Un 429 corto se resuelve esperando en el mismo modelo, y uno largo
+        -el cupo del dia agotado, por ejemplo- se resuelve cambiando: esperar
+        minutos delante de la clase no es una opcion. Cualquier otro error se
+        propaga tal cual, porque otro modelo no arregla una clave invalida ni
+        una peticion demasiado grande.
+        """
+        ultimo_error: Exception | None = None
+
+        for modelo in self._modelos_por_orden():
+            try:
+                respuesta = self._invocar_modelo(modelo, mensajes, pedir_json)
+            except Exception as error:
+                espera = self._espera_de_limite(error)
+                if espera is None:
+                    raise
+
+                ultimo_error = error
+
+                # Espera corta: se reintenta el mismo modelo una vez, con
+                # medio segundo de margen porque el reloj de Groq y el
+                # nuestro no estan sincronizados.
+                if espera <= self.ESPERA_MAXIMA_MISMO_MODELO:
+                    time.sleep(espera + 0.5)
+                    try:
+                        respuesta = self._invocar_modelo(modelo, mensajes, pedir_json)
+                    except Exception as error_reintento:
+                        if self._espera_de_limite(error_reintento) is None:
+                            raise
+                        ultimo_error = error_reintento
+                        self._marcar_enfriamiento(modelo, espera)
+                        continue
+                else:
+                    self._marcar_enfriamiento(modelo, espera)
+                    continue
+
+            self._modelo_usado = modelo
+            return respuesta
+
+        # Todos los modelos limitados: se propaga el ultimo 429 para que la
+        # capa superior lo traduzca y decida si reintentar.
+        raise ultimo_error  # type: ignore[misc]
+
+    def _invocar_modelo(self, modelo: str, mensajes: list, pedir_json: bool):
+        """Realiza la llamada a un modelo concreto, con o sin modo JSON."""
         # Los parametros comunes se arman aparte para no duplicar la llamada.
         parametros = {
-            "model": self._configuracion.modelo,
+            "model": modelo,
             "temperature": self.TEMPERATURA,
             "max_tokens": self.MAXIMO_TOKENS_DE_SALIDA,
             "messages": mensajes,
@@ -166,6 +270,39 @@ class ProveedorCompatibleOpenAI(ProveedorLLM):
             parametros["response_format"] = {"type": "json_object"}
 
         return self._cliente.chat.completions.create(**parametros)
+
+    def _espera_de_limite(self, error: Exception) -> float | None:
+        """
+        Devuelve los segundos de espera si el error es un 429, o None si no lo es.
+
+        Un 429 que no dice cuanto esperar se trata como largo (un minuto): sin
+        dato, lo prudente es no quedarse esperando y probar con otro modelo.
+        """
+        texto = str(error)
+        if "429" not in texto and "rate limit" not in texto.lower():
+            return None
+
+        segundos = segundos_hasta_reintento(texto)
+        return 60.0 if segundos is None else segundos
+
+    def _modelos_por_orden(self) -> list:
+        """Modelos a probar: los disponibles primero, respetando la preferencia."""
+        ahora = time.monotonic()
+        todos = list(self._configuracion.lista_de_modelos)
+
+        with self._cerrojo_enfriamiento:
+            libres = [m for m in todos if self._enfriamiento.get(m, 0.0) <= ahora]
+            # Si todos estan en enfriamiento se intenta igualmente, el que antes
+            # se reponga primero: el plazo es una estimacion de Groq y puede
+            # haberse quedado corto, y rendirse sin intentarlo seria peor.
+            if not libres:
+                libres = sorted(todos, key=lambda m: self._enfriamiento.get(m, 0.0))
+        return libres
+
+    def _marcar_enfriamiento(self, modelo: str, segundos: float) -> None:
+        """Anota que un modelo no debe usarse hasta pasado el plazo dado."""
+        with self._cerrojo_enfriamiento:
+            self._enfriamiento[modelo] = time.monotonic() + segundos
 
     def _es_rechazo_de_modo_json(self, error: Exception) -> bool:
         """

@@ -8,6 +8,7 @@ from typing import List, Tuple
 
 from aplicacion.analizador_respuesta import AnalizadorRespuesta
 from aplicacion.constructor_prompt import ConstructorPrompt
+from aplicacion.cuota_global import ErrorCuotaDiaria
 from aplicacion.planificador_verificacion import PlanificadorVerificacion
 from dominio.gasto import ConjuntoGastos
 from dominio.politica import Politica
@@ -90,7 +91,7 @@ class ServicioEvaluacion:
 
     def evaluar(
         self, politica: Politica, gastos: ConjuntoGastos,
-        usar_cache: bool = True,
+        usar_cache: bool = True, solo_cache: bool = False,
     ) -> ResultadoEvaluacion:
         """
         Evalua los gastos contra la politica y devuelve el resultado.
@@ -101,6 +102,12 @@ class ServicioEvaluacion:
         repetir una evaluacion sin tener que alterar la politica, que es lo
         unico que cambiaba la clave y obligaba a modificar el texto para forzar
         una llamada.
+
+        Con solo_cache a verdadero no se llama nunca al modelo: si no hay una
+        respuesta guardada se lanza ErrorCuotaDiaria. Lo activa la interfaz
+        cuando el aula ha agotado sus evaluaciones del dia, de modo que los
+        resultados ya calculados se siguen sirviendo y solo se bloquea lo que
+        costaria cuota.
 
         Puede lanzar ErrorProveedorLLM si el modelo no responde; la interfaz es
         responsable de traducir ese error a un mensaje comprensible.
@@ -126,6 +133,9 @@ class ServicioEvaluacion:
             # Se devuelve una copia marcada como procedente de cache para que la
             # interfaz pueda indicarlo sin alterar la entrada almacenada.
             return self._marcar_como_cache(resultado_en_cache)
+
+        if solo_cache:
+            raise ErrorCuotaDiaria("Sin evaluaciones reales disponibles hoy.")
 
         # Paso 2: primera pasada. El agente decide que hechos externos necesita
         # comprobar y la aplicacion ejecuta esas busquedas. Si no hay

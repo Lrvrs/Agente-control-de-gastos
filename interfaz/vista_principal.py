@@ -6,6 +6,7 @@ from pathlib import Path
 import streamlit as st
 
 from aplicacion.control_uso import ControlUso
+from aplicacion.cuota_global import CuotaDiariaGlobal, ErrorCuotaDiaria
 from aplicacion.redactor_cuerpo_correo import GeneradorCuerpoCorreo
 from aplicacion.servicio_evaluacion import ServicioEvaluacion
 from dominio.correo import RedactorCorreo
@@ -85,6 +86,12 @@ class VistaPrincipal:
             self._configuracion.busqueda.clave_api
         )
 
+        # Tope diario de toda el aula. Es un recurso compartido porque el del
+        # alumno se reinicia al recargar y no protege la cuota comun.
+        self._cuota_global = VistaPrincipal._obtener_cuota_compartida(
+            self._configuracion.aula.limite_diario
+        )
+
         # Control de cupo, individual de cada alumno.
         self._control_uso = ControlUso(self._configuracion.aula.limite_evaluaciones)
 
@@ -120,6 +127,14 @@ class VistaPrincipal:
                 demo.resultado, demo.traza,
             )
         return cache
+
+    @staticmethod
+    @st.cache_resource
+    def _obtener_cuota_compartida(limite: int) -> CuotaDiariaGlobal:
+        """Devuelve el unico contador diario del proceso."""
+        # El limite forma parte de la clave para que, al cambiarlo en los
+        # secretos, se construya un contador nuevo con el tope nuevo.
+        return CuotaDiariaGlobal(limite)
 
     @staticmethod
     @st.cache_resource
@@ -469,6 +484,8 @@ class VistaPrincipal:
             f"verificación · {self._buscador.nombre}\n"
             f"evaluaciones · {self._control_uso.realizadas}/"
             f"{self._control_uso.limite}\n"
+            f"aula hoy · {self._cuota_global.realizadas}/"
+            f"{self._cuota_global.limite}\n"
             f"versión · {VistaPrincipal._huella_del_codigo()}"
         )
 
@@ -681,6 +698,11 @@ class VistaPrincipal:
     # Acciones
     # ------------------------------------------------------------------
 
+    _MENSAJE_CUOTA_DIARIA = (
+        "El aula ha agotado las evaluaciones de hoy. Siguen disponibles los "
+        "resultados ya calculados, como los de la política por defecto."
+    )
+
     def _ejecutar_evaluacion(
         self, gastos: ConjuntoGastos, usar_cache: bool = True
     ) -> None:
@@ -715,6 +737,13 @@ class VistaPrincipal:
             al_reanudar=aviso_cola.empty,
         )
 
+        # Con el tope diario agotado, una repeticion forzada no tiene sentido:
+        # siempre costaria una evaluacion real. Se dice y no se intenta.
+        agotada = self._cuota_global.agotada
+        if agotada and not usar_cache:
+            st.warning(self._MENSAJE_CUOTA_DIARIA)
+            return
+
         servicio = ServicioEvaluacion(
             proveedor=proveedor, cache=self._cache, buscador=self._buscador,
             maximo_consultas=self._configuracion.busqueda.maximo_consultas,
@@ -726,7 +755,14 @@ class VistaPrincipal:
             "El agente está verificando los datos y aplicando tu política..."
         ):
             try:
-                resultado = servicio.evaluar(politica, gastos, usar_cache)
+                resultado = servicio.evaluar(
+                    politica, gastos, usar_cache, solo_cache=agotada
+                )
+            except ErrorCuotaDiaria:
+                # Agotado y sin respuesta guardada para esta politica: es lo
+                # unico que queda bloqueado.
+                st.warning(self._MENSAJE_CUOTA_DIARIA)
+                return
             except ErrorProveedorLLM as error:
                 # Se distingue la saturacion del resto para poder sugerir la
                 # accion correcta, que en ese caso es sencillamente esperar.
@@ -748,6 +784,7 @@ class VistaPrincipal:
         # Solo descuenta cupo una llamada real al modelo.
         if not resultado.procede_de_cache:
             self._control_uso.registrar_uso()
+            self._cuota_global.registrar()
 
         # Se vuelve a ejecutar el script para que las tarjetas de cupo y los
         # resultados se pinten ya con los valores actualizados.

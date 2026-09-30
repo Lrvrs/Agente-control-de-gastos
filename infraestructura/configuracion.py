@@ -76,6 +76,10 @@ class ConfiguracionAula:
     # a pensar que quiere cambiar antes de pulsar el boton.
     limite_evaluaciones: int
 
+    # Evaluaciones reales que puede gastar el aula ENTERA en un dia. A
+    # diferencia del anterior, este no se reinicia al recargar la pagina.
+    limite_diario: int = 40
+
 
 class Configuracion:
     """
@@ -239,7 +243,21 @@ class Configuracion:
         except ValueError:
             limite = self.LIMITE_EVALUACIONES_POR_DEFECTO
 
+        # Mismo criterio que arriba: un valor roto no puede dejar el tope
+        # abierto. El valor por defecto es una estimacion: el cupo gratuito es
+        # de unos 200.000 tokens al dia por modelo y una evaluacion completa
+        # ronda los 10.000, asi que con tres modelos caben unas 60 y se deja
+        # margen para el resto de aplicaciones que comparten la cuenta.
+        por_defecto = ConfiguracionAula.__dataclass_fields__["limite_diario"].default
+        try:
+            limite_diario = int(
+                self._leer("aula", "limite_diario", str(por_defecto))
+            )
+        except ValueError:
+            limite_diario = por_defecto
+
         return ConfiguracionAula(
             contrasena=self._leer("aula", "contrasena"),
             limite_evaluaciones=max(1, limite),
+            limite_diario=max(1, limite_diario),
         )

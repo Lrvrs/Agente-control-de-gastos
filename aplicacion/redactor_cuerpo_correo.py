@@ -96,6 +96,20 @@ sobre una decisión con consecuencias económicas.
 
         return cuerpo
 
+    def exportar_cuerpos(self) -> Dict[str, str]:
+        """Devuelve los cuerpos redactados hasta ahora, para guardarlos."""
+        return dict(self._cache)
+
+    def precargar_cuerpos(self, cuerpos: Dict[str, str]) -> None:
+        """
+        Incorpora cuerpos ya redactados, como los de la demo precalculada.
+
+        Se usa la misma clave que en la generacion normal, de modo que un
+        cuerpo precargado solo se sirve si el veredicto sigue siendo
+        exactamente el mismo para el que se escribio.
+        """
+        self._cache.update(cuerpos)
+
     def _componer_clave(
         self, gasto: Gasto, veredicto: Veredicto, destinatario: str
     ) -> str:

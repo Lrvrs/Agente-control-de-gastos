@@ -65,6 +65,13 @@ avanzados (no lee `runtime.txt`). El pie de la barra lateral muestra una huella
 del código; `python3 version.py` imprime la misma. Si no coinciden, lo
 desplegado no es lo último: Manage app → Reboot.
 
+Demo precalculada: `precalculado/demo.json` guarda una evaluación real (veredictos,
+traza y correos) que la app carga al arrancar. Lleva la huella del código con el
+que se hizo; cualquier cambio en un `.py` o en `datos/` la caduca y la app la
+ignora. Tras cambiar código: `LLM_CLAVE_API=... BUSQUEDA_CLAVE_API=... python3
+generar_demo.py` y commitear el JSON. Vive fuera de `datos/` a propósito: la
+huella incluye esa carpeta y el fichero se invalidaría a sí mismo.
+
 Secretos en el panel de Streamlit: `[llm] clave_api` (Groq), `[busqueda]
 clave_api` (Tavily), `[aula] contrasena` y `limite_evaluaciones`.
 

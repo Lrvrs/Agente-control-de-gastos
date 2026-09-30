@@ -83,8 +83,16 @@ class ProveedorLLM(ABC):
     """
 
     @abstractmethod
-    def completar(self, instruccion_sistema: str, mensaje_usuario: str) -> str:
-        """Envia la peticion al modelo y devuelve su respuesta en texto plano."""
+    def completar(
+        self, instruccion_sistema: str, mensaje_usuario: str,
+        pedir_json: bool = True,
+    ) -> str:
+        """
+        Envia la peticion al modelo y devuelve su respuesta en texto plano.
+
+        Con pedir_json a falso no se solicita el modo JSON: es lo que necesita
+        quien espera prosa, como el redactor de correos.
+        """
 
     @property
     @abstractmethod
@@ -165,7 +173,10 @@ class ProveedorCompatibleOpenAI(ProveedorLLM):
         # ser distintos, y la pantalla debe decir quien escribio el veredicto.
         return self._modelo_usado or self._configuracion.modelo
 
-    def completar(self, instruccion_sistema: str, mensaje_usuario: str) -> str:
+    def completar(
+        self, instruccion_sistema: str, mensaje_usuario: str,
+        pedir_json: bool = True,
+    ) -> str:
         """
         Envia una unica peticion al modelo con los dos mensajes indicados.
 
@@ -182,8 +193,14 @@ class ProveedorCompatibleOpenAI(ProveedorLLM):
         # Primer intento pidiendo explicitamente un objeto JSON. Los proveedores
         # que soportan este modo garantizan sintaxis valida, lo que elimina la
         # causa mas frecuente de fallo al analizar la respuesta.
+        #
+        # Quien espera prosa lo desactiva. Pedir ese modo sin que el prompt
+        # mencione la palabra "json" lo rechaza el proveedor con un 400, y el
+        # reintento de abajo gastaba una llamada entera, en plena saturacion,
+        # solo para repetir lo mismo sin el parametro. Y si el modelo lo
+        # aceptase, obligaria a responder en JSON donde se quiere un texto.
         try:
-            respuesta = self._invocar(mensajes, pedir_json=True)
+            respuesta = self._invocar(mensajes, pedir_json=pedir_json)
         except Exception as error:
             # No todos los modelos admiten el modo JSON. Los sistemas agenticos
             # con herramientas integradas, en particular, suelen rechazarlo.
@@ -192,7 +209,7 @@ class ProveedorCompatibleOpenAI(ProveedorLLM):
             # ante un rechazo de ese parametro concreto se reintenta sin el, y
             # el analizador de respuestas, que ya es defensivo, se encarga del
             # resto. Cualquier otro error se propaga sin reintento.
-            if not self._es_rechazo_de_modo_json(error):
+            if not pedir_json or not self._es_rechazo_de_modo_json(error):
                 raise self._traducir_error(error) from error
 
             try:

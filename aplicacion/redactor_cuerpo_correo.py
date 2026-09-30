@@ -83,6 +83,10 @@ sobre una decisión con consecuencias económicas.
             respuesta = self._proveedor.completar(
                 self.INSTRUCCION,
                 self._componer_datos(gasto, veredicto, destinatario),
+                # Se quiere prosa. El modo JSON lo rechazaria el proveedor, al
+                # no aparecer la palabra en el prompt, y costaria una segunda
+                # llamada en cada correo.
+                pedir_json=False,
             )
         except ErrorProveedorLLM:
             return ""

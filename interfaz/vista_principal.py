@@ -19,6 +19,7 @@ from dominio.veredicto import (
 )
 from infraestructura.buscador_web import FabricaBuscadores
 from infraestructura.cache_evaluaciones import CacheEvaluaciones
+from infraestructura.cola_llm import ColaGlobal, ProveedorConCola
 from infraestructura.configuracion import Configuracion
 from infraestructura.demo_precalculada import RepositorioDemoPrecalculada
 from infraestructura.proveedor_llm import ErrorProveedorLLM, FabricaProveedores
@@ -119,6 +120,14 @@ class VistaPrincipal:
                 demo.resultado, demo.traza,
             )
         return cache
+
+    @staticmethod
+    @st.cache_resource
+    def _obtener_cola_compartida() -> ColaGlobal:
+        """Devuelve la unica cola de llamadas al modelo del proceso."""
+        # Tiene que ser un recurso compartido y no un objeto por sesion: el
+        # semaforo solo limita si lo ven todos los alumnos a la vez.
+        return ColaGlobal()
 
     @staticmethod
     @st.cache_resource
@@ -682,6 +691,19 @@ class VistaPrincipal:
             )
             return
 
+        # El aviso de cola se dibuja en un hueco propio que se vacia al
+        # reanudar. Solo aparece si de verdad hay que esperar turno.
+        aviso_cola = st.empty()
+        proveedor = ProveedorConCola(
+            proveedor,
+            VistaPrincipal._obtener_cola_compartida(),
+            al_esperar=lambda: aviso_cola.info(
+                "En cola: hay otras evaluaciones en curso. "
+                "Tu turno llegará en unos segundos."
+            ),
+            al_reanudar=aviso_cola.empty,
+        )
+
         servicio = ServicioEvaluacion(
             proveedor=proveedor, cache=self._cache, buscador=self._buscador
         )
@@ -804,6 +826,14 @@ class VistaPrincipal:
             proveedor = FabricaProveedores.crear(self._configuracion.llm)
         except ErrorProveedorLLM:
             return None
+
+        # Sin avisos a la pantalla: el generador se comparte entre sesiones y un
+        # aviso guardado pertenecerian a la pantalla de la primera que lo
+        # construyo. Espera su turno en silencio, cubierto por el indicador de
+        # "Redactando el correo".
+        proveedor = ProveedorConCola(
+            proveedor, VistaPrincipal._obtener_cola_compartida()
+        )
 
         return VistaPrincipal._obtener_generador_compartido(
             proveedor, self._configuracion.llm.modelo, firma_estructural(),

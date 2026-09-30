@@ -50,6 +50,12 @@ def main() -> int:
     print(f"Evaluando {len(gastos)} gastos con {proveedor.nombre_modelo}...")
     resultado = servicio.evaluar(politica, gastos, usar_cache=False)
 
+    # Una demo sin verificar se descarta por la misma razon que una sin
+    # buscador: presentaria como verdad del agente algo que no comprobo.
+    if resultado.verificacion_fallida:
+        print("La fase de verificacion fallo. No se guarda nada; repite.")
+        return 1
+
     # Una demo con huecos se descarta: el aula la veria como la verdad del
     # agente, y un hueco es un fallo puntual del modelo que se arregla
     # repitiendo la ejecucion.

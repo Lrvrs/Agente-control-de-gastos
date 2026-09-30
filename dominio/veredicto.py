@@ -164,6 +164,12 @@ class ResultadoEvaluacion:
     # importa saber que el agente no acaba de buscar nada en la web.
     precalculado: bool = False
 
+    # Indica que la fase de verificacion no pudo ejecutarse. Los veredictos que
+    # dependian de un hecho externo salen entonces sin comprobar, y la pantalla
+    # debe decirlo: sin esta marca parecerian el resultado de una verificacion
+    # que no se hizo.
+    verificacion_fallida: bool = False
+
     # Identificador del modelo que lo genero, para mostrarlo como trazabilidad.
     modelo_utilizado: str = ""
 

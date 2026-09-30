@@ -65,7 +65,13 @@ class ServicioEvaluacion:
         self._proveedor = proveedor
         self._cache = cache
         self._buscador = buscador
-        self._planificador = PlanificadorVerificacion(proveedor)
+        # El planificador llama al modelo a traves del metodo con reintentos de
+        # este servicio, para que un 429 en la primera pasada se trate igual que
+        # uno en la segunda.
+        self._planificador = PlanificadorVerificacion(
+            proveedor, self._llamar_con_reintentos
+        )
+        self.verificacion_fallida = False
 
         # Traza de la ultima verificacion, para poder mostrarla en pantalla. Es
         # lo que permite ensenar en clase que decidio buscar el agente y que
@@ -124,11 +130,16 @@ class ServicioEvaluacion:
         # tamano. La division ocurre dentro de este metodo y es recursiva.
         resultado = self._evaluar_conjunto(politica, gastos, hechos)
         resultado.huella_politica = politica.huella
+        resultado.verificacion_fallida = self.verificacion_fallida
 
         # Paso 5: guardar para que la siguiente peticion identica salga gratis.
-        self._cache.guardar(
-            politica.huella, huella_gastos, resultado, self.traza_verificacion
-        )
+        # Un resultado sin verificar NO se guarda: serviria a toda la clase un
+        # veredicto pobre como si fuera el bueno, y nadie podria repetirlo
+        # porque la cache lo daria por resuelto.
+        if not resultado.verificacion_fallida:
+            self._cache.guardar(
+                politica.huella, huella_gastos, resultado, self.traza_verificacion
+            )
 
         return resultado
 
@@ -147,6 +158,7 @@ class ServicioEvaluacion:
         # Se reinicia la traza en cada evaluacion, para que lo que se muestre en
         # pantalla corresponda siempre a la ejecucion en curso.
         self.traza_verificacion = []
+        self.verificacion_fallida = False
 
         # Sin herramienta capaz de comprobar nada, se omite tambien la fase de
         # planificacion: preparar consultas que nadie va a ejecutar gastaria una
@@ -156,6 +168,7 @@ class ServicioEvaluacion:
 
         # El agente decide que necesita mirar. La aplicacion no lo deduce.
         consultas = self._planificador.planificar(gastos, politica)
+        self.verificacion_fallida = self._planificador.fallo
         if not consultas:
             return ""
 

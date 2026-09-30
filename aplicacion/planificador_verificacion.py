@@ -1,7 +1,7 @@
 """Primera pasada del agente: decidir qué hechos necesita verificar."""
 
 import json
-from typing import List
+from typing import Callable, List
 
 from dominio.gasto import ConjuntoGastos
 from infraestructura.proveedor_llm import ErrorProveedorLLM, ProveedorLLM
@@ -59,9 +59,27 @@ Responde únicamente con un objeto JSON de esta forma:
 
 Si ningún gasto depende de un hecho externo, devuelve la lista vacía."""
 
-    def __init__(self, proveedor: ProveedorLLM) -> None:
-        """Recibe el mismo proveedor que usa el resto de la aplicación."""
+    def __init__(
+        self,
+        proveedor: ProveedorLLM,
+        llamar: Callable[[str, str], str] | None = None,
+    ) -> None:
+        """
+        Recibe el mismo proveedor que usa el resto de la aplicación.
+
+        `llamar` permite prestarle la forma de llamar al modelo que ya tiene el
+        servicio, con sus reintentos. Se pasa en lugar de duplicar aquí la
+        lógica de espera: dos copias acabarían desincronizadas. Sin ella se
+        llama al proveedor directamente, que es como se ejercita en pruebas.
+        """
         self._proveedor = proveedor
+        self._llamar = llamar or proveedor.completar
+
+        # Verdadero si la última planificación no pudo hacerse. Se distingue
+        # de "no hay nada que verificar": ambas devuelven una lista vacía, pero
+        # la primera deja el gasto sin comprobar por un fallo y quien la llama
+        # debe poder avisar de ello.
+        self.fallo = False
 
     def planificar(self, gastos: ConjuntoGastos, politica=None) -> List[str]:
         """
@@ -79,10 +97,12 @@ Si ningún gasto depende de un hecho externo, devuelve la lista vacía."""
         # contradice lo que la aplicación promete, que es que el comportamiento
         # lo decida la política y no el código.
         mensaje = self._componer_mensaje(gastos, politica)
+        self.fallo = False
 
         try:
-            respuesta = self._proveedor.completar(self.INSTRUCCION, mensaje)
+            respuesta = self._llamar(self.INSTRUCCION, mensaje)
         except ErrorProveedorLLM:
+            self.fallo = True
             return []
 
         return self._extraer_consultas(respuesta)
@@ -127,12 +147,16 @@ Si ningún gasto depende de un hecho externo, devuelve la lista vacía."""
         if inicio != -1 and final > inicio:
             limpio = limpio[inicio : final + 1]
 
+        # Una respuesta que no es el JSON pedido cuenta como fallo, no como
+        # "nada que verificar": lo segundo es una lista vacía bien formada.
         try:
             datos = json.loads(limpio)
         except (json.JSONDecodeError, TypeError):
+            self.fallo = True
             return []
 
         if not isinstance(datos, dict):
+            self.fallo = True
             return []
 
         consultas: List[str] = []

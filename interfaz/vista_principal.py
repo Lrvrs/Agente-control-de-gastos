@@ -651,6 +651,17 @@ class VistaPrincipal:
                 f"{', '.join(cambiados)}. Aparecen resaltados en la tabla."
             )
 
+        # Si la verificacion fallo, se dice con todas las letras. Sin el
+        # aviso, los gastos que dependian de un hecho externo aparecerian como
+        # dudosos sin explicacion, y parecerian una limitacion del agente
+        # cuando en realidad es un fallo de la conexion.
+        if resultado.verificacion_fallida:
+            st.warning(
+                "No se pudo verificar en la web. Los gastos que dependen de un "
+                "hecho externo se han resuelto sin comprobarlo. Pulsa "
+                "**Volver a evaluar** para intentarlo de nuevo."
+            )
+
         # Trazabilidad discreta del origen del resultado.
         # El precalculado se nombra aparte: es una evaluacion real, pero hecha
         # antes de clase, y no conviene que parezca que el agente acaba de

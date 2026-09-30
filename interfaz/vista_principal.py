@@ -20,7 +20,6 @@ from dominio.veredicto import (
 from infraestructura.buscador_web import FabricaBuscadores
 from infraestructura.cache_evaluaciones import CacheEvaluaciones
 from infraestructura.configuracion import Configuracion
-from infraestructura.demo_precalculada import RepositorioDemoPrecalculada
 from infraestructura.proveedor_llm import ErrorProveedorLLM, FabricaProveedores
 from infraestructura.repositorio_datos import ErrorFicheroGastos, RepositorioDatos
 from interfaz.componentes import Componentes
@@ -103,22 +102,7 @@ class VistaPrincipal:
         # cambiarlas equivale a no haber cambiado nada. Ese fue exactamente el
         # motivo por el que arreglar el prompt no se notaba hasta editar la
         # politica, que era lo unico que movia la clave.
-        cache = CacheEvaluaciones()
-
-        # Se siembra con la evaluacion de la demo, si existe y se hizo con este
-        # mismo codigo. Sin esto, el primer alumno de la clase paga una
-        # evaluacion completa justo en el minuto de mayor concurrencia, y cada
-        # vez que Streamlit duerme la app vuelve a ocurrir. La comprobacion de
-        # la huella va dentro del repositorio: una demo hecha con otro prompt
-        # devuelve None y se ignora, que es lo que evita servir respuestas de
-        # una version anterior.
-        demo = RepositorioDemoPrecalculada().cargar(huella)
-        if demo is not None:
-            cache.guardar(
-                demo.huella_politica, demo.huella_gastos,
-                demo.resultado, demo.traza,
-            )
-        return cache
+        return CacheEvaluaciones()
 
     @staticmethod
     @st.cache_resource
@@ -643,15 +627,7 @@ class VistaPrincipal:
             )
 
         # Trazabilidad discreta del origen del resultado.
-        # El precalculado se nombra aparte: es una evaluacion real, pero hecha
-        # antes de clase, y no conviene que parezca que el agente acaba de
-        # consultar la web.
-        if resultado.precalculado:
-            origen = "una evaluación precalculada antes de la clase"
-        elif resultado.procede_de_cache:
-            origen = "caché"
-        else:
-            origen = "modelo"
+        origen = "caché" if resultado.procede_de_cache else "modelo"
         st.caption(
             f"Resultado obtenido de {origen} · "
             f"modelo {resultado.modelo_utilizado or 'no indicado'}"
@@ -806,30 +782,18 @@ class VistaPrincipal:
             return None
 
         return VistaPrincipal._obtener_generador_compartido(
-            proveedor, self._configuracion.llm.modelo, firma_estructural(),
-            VistaPrincipal._huella_del_codigo(),
+            proveedor, self._configuracion.llm.modelo, firma_estructural()
         )
 
     @staticmethod
     @st.cache_resource
-    def _obtener_generador_compartido(
-        _proveedor, modelo: str, firma: str, huella: str
-    ):
+    def _obtener_generador_compartido(_proveedor, modelo: str, firma: str):
         """Devuelve el unico generador del proceso para un modelo dado."""
         # El proveedor lleva guion bajo para que Streamlit no intente calcular
         # su huella, que no es serializable. El nombre del modelo si entra en la
         # firma: al cambiarlo desde el panel de secretos se construye un
         # generador nuevo y se descarta la cache de textos del anterior.
-        generador = GeneradorCuerpoCorreo(_proveedor)
-
-        # Los correos de la demo se redactaron antes de clase junto con la
-        # evaluacion. La huella del codigo entra en la clave del recurso para
-        # que, al cambiar el prompt, se construya un generador nuevo y no se
-        # arrastren cuerpos escritos con las instrucciones anteriores.
-        demo = RepositorioDemoPrecalculada().cargar(huella)
-        if demo is not None:
-            generador.precargar_cuerpos(demo.cuerpos_correo)
-        return generador
+        return GeneradorCuerpoCorreo(_proveedor)
 
     def _renderizar_traza_verificacion(self) -> None:
         """

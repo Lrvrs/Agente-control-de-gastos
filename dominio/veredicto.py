@@ -159,11 +159,6 @@ class ResultadoEvaluacion:
     # Indica si el resultado se sirvio desde la cache en lugar de llamar al modelo.
     procede_de_cache: bool = False
 
-    # Indica que es una evaluacion real hecha antes de clase y cargada desde
-    # disco. Se distingue de la cache normal porque a quien mira la pantalla le
-    # importa saber que el agente no acaba de buscar nada en la web.
-    precalculado: bool = False
-
     # Identificador del modelo que lo genero, para mostrarlo como trazabilidad.
     modelo_utilizado: str = ""
 

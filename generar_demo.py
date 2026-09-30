@@ -45,7 +45,8 @@ def main() -> int:
     gastos = repositorio.cargar_gastos()
 
     servicio = ServicioEvaluacion(
-        proveedor=proveedor, cache=CacheEvaluaciones(), buscador=buscador
+        proveedor=proveedor, cache=CacheEvaluaciones(), buscador=buscador,
+        maximo_consultas=configuracion.busqueda.maximo_consultas,
     )
     print(f"Evaluando {len(gastos)} gastos con {proveedor.nombre_modelo}...")
     resultado = servicio.evaluar(politica, gastos, usar_cache=False)

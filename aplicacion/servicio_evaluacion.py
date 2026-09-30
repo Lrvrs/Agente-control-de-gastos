@@ -3,6 +3,7 @@
 import hashlib
 import random
 import time
+from concurrent.futures import ThreadPoolExecutor
 from typing import List, Tuple
 
 from aplicacion.analizador_respuesta import AnalizadorRespuesta
@@ -48,6 +49,12 @@ class ServicioEvaluacion:
     # gasto sigue sin caber, no hay nada que dividir y el error es legitimo.
     TAMANO_MINIMO_DE_LOTE = 1
 
+    # Busquedas simultaneas. Son esperas de red independientes entre si: en
+    # serie, ocho consultas de un par de segundos suman una espera que el
+    # alumno percibe como aplicacion colgada. Tres deja margen bajo el limite
+    # de peticiones por segundo del plan gratuito.
+    HILOS_DE_BUSQUEDA = 3
+
     def __init__(
         self,
         proveedor: ProveedorLLM,
@@ -55,6 +62,7 @@ class ServicioEvaluacion:
         buscador: BuscadorWeb | None = None,
         constructor: ConstructorPrompt | None = None,
         analizador: AnalizadorRespuesta | None = None,
+        maximo_consultas: int | None = None,
     ) -> None:
         """
         Recibe sus colaboradores en lugar de construirlos.
@@ -69,7 +77,7 @@ class ServicioEvaluacion:
         # este servicio, para que un 429 en la primera pasada se trate igual que
         # uno en la segunda.
         self._planificador = PlanificadorVerificacion(
-            proveedor, self._llamar_con_reintentos
+            proveedor, self._llamar_con_reintentos, maximo_consultas
         )
         self.verificacion_fallida = False
 
@@ -172,13 +180,15 @@ class ServicioEvaluacion:
         if not consultas:
             return ""
 
-        bloques: List[str] = []
-        for consulta in consultas:
-            resultado = self._buscador.buscar(consulta)
-            self.traza_verificacion.append(resultado)
-            bloques.append(resultado.a_bloque_para_modelo())
+        # Las busquedas son independientes, asi que se lanzan juntas. map
+        # devuelve los resultados en el orden de las consultas, no en el de
+        # llegada, de modo que la traza y el bloque de hechos salen siempre
+        # igual y una misma evaluacion no cambia de aspecto entre ejecuciones.
+        with ThreadPoolExecutor(max_workers=self.HILOS_DE_BUSQUEDA) as grupo:
+            resultados = list(grupo.map(self._buscador.buscar, consultas))
 
-        return "\n\n".join(bloques)
+        self.traza_verificacion.extend(resultados)
+        return "\n\n".join(r.a_bloque_para_modelo() for r in resultados)
 
     def _evaluar_conjunto(
         self, politica: Politica, gastos: ConjuntoGastos, hechos: str = "",

@@ -63,6 +63,7 @@ Si ningún gasto depende de un hecho externo, devuelve la lista vacía."""
         self,
         proveedor: ProveedorLLM,
         llamar: Callable[[str, str], str] | None = None,
+        maximo_consultas: int | None = None,
     ) -> None:
         """
         Recibe el mismo proveedor que usa el resto de la aplicación.
@@ -74,6 +75,10 @@ Si ningún gasto depende de un hecho externo, devuelve la lista vacía."""
         """
         self._proveedor = proveedor
         self._llamar = llamar or proveedor.completar
+
+        # El tope se inyecta para poder bajarlo en clase desde los secretos, sin
+        # tocar codigo. Sin valor, rige el de la clase.
+        self._maximo_consultas = maximo_consultas or self.MAXIMO_CONSULTAS
 
         # Verdadero si la última planificación no pudo hacerse. Se distingue
         # de "no hay nada que verificar": ambas devuelven una lista vacía, pero
@@ -172,4 +177,4 @@ Si ningún gasto depende de un hecho externo, devuelve la lista vacía."""
             if texto and texto not in consultas:
                 consultas.append(texto)
 
-        return consultas[: self.MAXIMO_CONSULTAS]
+        return consultas[: self._maximo_consultas]

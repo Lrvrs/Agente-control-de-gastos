@@ -716,7 +716,8 @@ class VistaPrincipal:
         )
 
         servicio = ServicioEvaluacion(
-            proveedor=proveedor, cache=self._cache, buscador=self._buscador
+            proveedor=proveedor, cache=self._cache, buscador=self._buscador,
+            maximo_consultas=self._configuracion.busqueda.maximo_consultas,
         )
 
         # El indicador de progreso importa: sin el, tres segundos de espera se

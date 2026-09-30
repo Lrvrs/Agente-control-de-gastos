@@ -53,6 +53,11 @@ class ConfiguracionBusqueda:
     # externo, que es una degradacion controlada y no un fallo.
     clave_api: str
 
+    # Tope de consultas que el agente puede lanzar por evaluacion. Cada una
+    # gasta un credito del plan gratuito (unos 1.000 al mes) y engorda el
+    # contexto de la segunda llamada, asi que en clase conviene bajarlo.
+    maximo_consultas: int = 8
+
     @property
     def esta_configurado(self) -> bool:
         """Indica si el agente dispone de herramienta de busqueda."""
@@ -102,7 +107,8 @@ class Configuracion:
 
         self._llm = self._cargar_llm()
         self._busqueda = ConfiguracionBusqueda(
-            clave_api=self._leer("busqueda", "clave_api")
+            clave_api=self._leer("busqueda", "clave_api"),
+            maximo_consultas=self._leer_maximo_consultas(),
         )
         self._aula = self._cargar_aula()
 
@@ -166,6 +172,19 @@ class Configuracion:
         # Segunda fuente: variable de entorno con el nombre SECCION_CLAVE.
         nombre_variable = f"{seccion.upper()}_{clave.upper()}"
         return os.environ.get(nombre_variable, por_defecto)
+
+    def _leer_maximo_consultas(self) -> int:
+        """Lee el tope de consultas; ante un valor roto, usa el de siempre."""
+        por_defecto = ConfiguracionBusqueda.__dataclass_fields__[
+            "maximo_consultas"
+        ].default
+        bruto = self._leer("busqueda", "maximo_consultas", str(por_defecto))
+        try:
+            valor = int(bruto)
+        except ValueError:
+            return por_defecto
+        # Cero o negativo desactivaria la verificacion sin decirlo.
+        return valor if valor >= 1 else por_defecto
 
     def _leer_lista(self, seccion: str, clave: str) -> tuple:
         """

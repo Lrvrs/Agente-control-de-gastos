@@ -2,6 +2,7 @@
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
+import threading
 from typing import Dict, List
 
 import httpx
@@ -222,6 +223,11 @@ class BuscadorConCache(BuscadorWeb):
         self._buscador = buscador
         self._entradas: Dict[str, ResultadoBusqueda] = {}
 
+        # Con las busquedas en paralelo, varios hilos escriben a la vez. El
+        # cerrojo protege solo el diccionario y no la llamada de red, que es
+        # lo lento y debe poder solaparse.
+        self._cerrojo = threading.Lock()
+
     @property
     def nombre(self) -> str:
         """Identificador del buscador envuelto."""
@@ -243,16 +249,27 @@ class BuscadorConCache(BuscadorWeb):
         # no provoquen dos busquedas de lo mismo.
         clave = " ".join(consulta.lower().split())
 
-        if clave in self._entradas:
-            return self._entradas[clave]
+        with self._cerrojo:
+            if clave in self._entradas:
+                return self._entradas[clave]
 
         resultado = self._buscador.buscar(consulta)
 
-        # Desalojo sencillo de la entrada mas antigua al alcanzar el techo.
-        if len(self._entradas) >= self.MAXIMO_ENTRADAS:
-            del self._entradas[next(iter(self._entradas))]
+        # Un resultado vacio no se guarda. El buscador real devuelve vacio
+        # tanto cuando no hay nada que encontrar como cuando falla la red o el
+        # servicio limita el ritmo, y los dos casos no se distinguen desde
+        # aqui. Guardarlo dejaba a toda la clase sin ese dato hasta reiniciar,
+        # por un fallo de un segundo. Cuesta repetir alguna busqueda que de
+        # verdad no tenia respuesta, y es un precio menor.
+        if not resultado.hay_informacion:
+            return resultado
 
-        self._entradas[clave] = resultado
+        with self._cerrojo:
+            # Desalojo sencillo de la entrada mas antigua al alcanzar el techo.
+            if len(self._entradas) >= self.MAXIMO_ENTRADAS:
+                del self._entradas[next(iter(self._entradas))]
+
+            self._entradas[clave] = resultado
         return resultado
 
 

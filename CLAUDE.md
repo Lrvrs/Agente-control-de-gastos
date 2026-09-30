@@ -72,6 +72,12 @@ ignora. Tras cambiar código: `LLM_CLAVE_API=... BUSQUEDA_CLAVE_API=... python3
 generar_demo.py` y commitear el JSON. Vive fuera de `datos/` a propósito: la
 huella incluye esa carpeta y el fichero se invalidaría a sí mismo.
 
+Antes de clase: abrir la app unos 10 minutos antes. Streamlit Community Cloud
+la duerme tras unas 12 horas sin visitas y al despertar pierde la memoria (cache
+de evaluaciones, de busquedas y contador diario). Sin `demo.json` vigente, hay
+que pulsar Evaluar gastos una vez para que el primer alumno no pague la
+evaluacion. Comprobar que la huella del pie coincide con `python3 version.py`.
+
 Secretos en el panel de Streamlit: `[llm] clave_api` (Groq), `[busqueda]
 clave_api` (Tavily), `[aula] contrasena` y `limite_evaluaciones`.
 

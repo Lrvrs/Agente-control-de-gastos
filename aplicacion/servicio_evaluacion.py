@@ -1,6 +1,7 @@
 """Caso de uso principal: evaluar un conjunto de gastos contra una politica."""
 
 import hashlib
+import random
 import time
 from typing import List, Tuple
 
@@ -29,9 +30,15 @@ class ServicioEvaluacion:
     # servicio esta saturado, insistir mucho agrava el problema para todos.
     REINTENTOS_ANTE_SATURACION = 2
 
-    # Espera entre reintentos, en segundos. Suficiente para que se libere la
-    # ventana de ritmo sin que el alumno perciba que la aplicacion se ha colgado.
-    ESPERA_ENTRE_REINTENTOS = 3.0
+    # Espera base antes del primer reintento, en segundos. Cada reintento
+    # duplica la anterior hasta el tope. Con una espera fija, los alumnos que
+    # recibieron el 429 a la vez volvian a llamar a la vez y chocaban otra vez;
+    # crecer da tiempo a que se libere la ventana de ritmo.
+    ESPERA_BASE_REINTENTOS = 2.0
+
+    # Tope de la espera, en segundos. Mas alla el alumno percibe que la
+    # aplicacion se ha colgado.
+    ESPERA_MAXIMA_REINTENTOS = 10.0
 
     # Numero minimo de gastos que debe tener un lote para que tenga sentido
     # seguir dividiendolo. Se fija en uno porque con los sistemas agenticos el
@@ -307,10 +314,26 @@ class ServicioEvaluacion:
 
                 # Si aun quedan intentos, se espera antes del siguiente.
                 if numero_intento < self.REINTENTOS_ANTE_SATURACION:
-                    time.sleep(self.ESPERA_ENTRE_REINTENTOS)
+                    time.sleep(self._espera_antes_de_reintentar(numero_intento))
 
         # Agotados los intentos se propaga el ultimo error conocido.
         raise ultimo_error if ultimo_error else ErrorProveedorLLM("Fallo desconocido.")
+
+    def _espera_antes_de_reintentar(self, numero_intento: int) -> float:
+        """
+        Segundos a esperar tras el intento indicado (0 es el primero).
+
+        Crece de forma exponencial y lleva jitter: una fraccion aleatoria de
+        la espera. Sin el, veinte alumnos rechazados en el mismo instante
+        reintentarian todos en el mismo instante, que es justo el choque que
+        se quiere evitar. Se toma entre la mitad y el total, y no entre cero
+        y el total, para que nunca se reintente casi de inmediato.
+        """
+        espera = min(
+            self.ESPERA_MAXIMA_REINTENTOS,
+            self.ESPERA_BASE_REINTENTOS * (2 ** numero_intento),
+        )
+        return random.uniform(espera / 2, espera)
 
     def calcular_huella_gastos(self, gastos: ConjuntoGastos) -> str:
         """Huella estable del conjunto de gastos, para indexar la cache."""

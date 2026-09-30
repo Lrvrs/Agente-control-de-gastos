@@ -84,7 +84,7 @@ class ServicioEvaluacion:
         Puede lanzar ErrorProveedorLLM si el modelo no responde; la interfaz es
         responsable de traducir ese error a un mensaje comprensible.
         """
-        huella_gastos = self._calcular_huella_gastos(gastos)
+        huella_gastos = self.calcular_huella_gastos(gastos)
 
         # Paso 1: cache. Es el camino mas frecuente al principio de la clase,
         # cuando todos evaluan con la politica por defecto sin haberla tocado.
@@ -312,8 +312,10 @@ class ServicioEvaluacion:
         # Agotados los intentos se propaga el ultimo error conocido.
         raise ultimo_error if ultimo_error else ErrorProveedorLLM("Fallo desconocido.")
 
-    def _calcular_huella_gastos(self, gastos: ConjuntoGastos) -> str:
+    def calcular_huella_gastos(self, gastos: ConjuntoGastos) -> str:
         """Huella estable del conjunto de gastos, para indexar la cache."""
+        # Es publica porque el script que precalcula la demo necesita la misma
+        # clave que usa este servicio, y duplicar la formula la desincronizaria.
         # Se construye sobre la misma serializacion que se envia al modelo, de
         # modo que dos conjuntos que producirian el mismo prompt comparten clave.
         contenido = gastos.a_bloque_para_modelo()
@@ -327,6 +329,7 @@ class ServicioEvaluacion:
             veredictos=dict(original.veredictos),
             huella_politica=original.huella_politica,
             procede_de_cache=True,
+            precalculado=original.precalculado,
             modelo_utilizado=original.modelo_utilizado,
         )
         return copia

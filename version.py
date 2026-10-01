@@ -17,7 +17,16 @@ def huella() -> str:
     raiz = Path(__file__).resolve().parent
     resumen = hashlib.sha256()
 
-    for ruta in sorted(raiz.rglob("*.py")) + sorted(raiz.glob("datos/*")):
+    # Se descartan las carpetas ocultas y los entornos virtuales: un .venv
+    # dentro del proyecto -cualquiera que lo cree en local- arrastra miles de
+    # .py ajenos y hace que la huella de esa maquina no coincida nunca con la
+    # del despliegue, que no los tiene.
+    fuentes = [
+        ruta for ruta in sorted(raiz.rglob("*.py"))
+        if not any(p.startswith(".") or p in ("venv", "site-packages", "node_modules")
+                   for p in ruta.relative_to(raiz).parts)
+    ]
+    for ruta in fuentes + sorted(raiz.glob("datos/*")):
         try:
             resumen.update(ruta.read_bytes())
         except OSError:

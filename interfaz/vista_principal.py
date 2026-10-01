@@ -571,7 +571,17 @@ class VistaPrincipal:
         # Se recorren los fuentes en orden estable para que la huella sea
         # reproducible, y se incluyen tambien los datos, porque un cambio en la
         # politica o en los gastos tambien es un cambio de version.
-        for ruta in sorted(raiz.rglob("*.py")) + sorted(raiz.glob("datos/*")):
+        # Mismo filtro que version.py: sin carpetas ocultas ni entornos
+        # virtuales, o la huella de una maquina con .venv no coincide con la
+        # del despliegue y la demo precalculada se ignora sin avisar.
+        fuentes = [
+            ruta for ruta in sorted(raiz.rglob("*.py"))
+            if not any(
+                p.startswith(".") or p in ("venv", "site-packages", "node_modules")
+                for p in ruta.relative_to(raiz).parts
+            )
+        ]
+        for ruta in fuentes + sorted(raiz.glob("datos/*")):
             try:
                 resumen.update(ruta.read_bytes())
             except OSError:

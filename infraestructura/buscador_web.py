@@ -58,8 +58,14 @@ class BuscadorWeb(ABC):
     """
 
     @abstractmethod
-    def buscar(self, consulta: str) -> ResultadoBusqueda:
-        """Ejecuta una consulta y devuelve lo encontrado."""
+    def buscar(self, consulta: str, refrescar: bool = False) -> ResultadoBusqueda:
+        """
+        Ejecuta una consulta y devuelve lo encontrado.
+
+        Con refrescar a verdadero se ignora cualquier resultado guardado. Solo
+        tiene efecto en un buscador con memoria; los demas lo aceptan y no lo
+        usan, para que quien llama no tenga que saber cual tiene delante.
+        """
 
     @property
     @abstractmethod
@@ -100,7 +106,7 @@ class BuscadorNulo(BuscadorWeb):
         """El buscador nulo no comprueba nada."""
         return False
 
-    def buscar(self, consulta: str) -> ResultadoBusqueda:
+    def buscar(self, consulta: str, refrescar: bool = False) -> ResultadoBusqueda:
         """Devuelve siempre un resultado vacio."""
         return ResultadoBusqueda(consulta=consulta, resumen="")
 
@@ -141,7 +147,7 @@ class BuscadorTavily(BuscadorWeb):
         """Identificador del servicio."""
         return "Tavily"
 
-    def buscar(self, consulta: str) -> ResultadoBusqueda:
+    def buscar(self, consulta: str, refrescar: bool = False) -> ResultadoBusqueda:
         """
         Ejecuta la consulta contra el servicio.
 
@@ -243,15 +249,27 @@ class BuscadorConCache(BuscadorWeb):
         """Numero de consultas distintas ya resueltas."""
         return len(self._entradas)
 
-    def buscar(self, consulta: str) -> ResultadoBusqueda:
-        """Devuelve el resultado guardado o lo solicita al buscador real."""
+    def buscar(self, consulta: str, refrescar: bool = False) -> ResultadoBusqueda:
+        """
+        Devuelve el resultado guardado o lo solicita al buscador real.
+
+        Con refrescar se salta lo guardado y se vuelve a preguntar. Existe
+        porque la memoria es de proceso y la comparte toda la clase: un
+        resultado malo que no esta vacio -fuentes que no vienen a cuento, por
+        ejemplo- se guardaba igual y se servia a todos hasta reiniciar la
+        aplicacion, sin forma de corregirlo. Si la repeticion trae datos,
+        sustituye a lo guardado, de modo que la correccion llega tambien a los
+        demas. Si vuelve vacia, no se toca nada: un fallo de red no debe
+        borrar un resultado que quiza era bueno.
+        """
         # La clave se normaliza para que diferencias de mayusculas o espacios
         # no provoquen dos busquedas de lo mismo.
         clave = " ".join(consulta.lower().split())
 
-        with self._cerrojo:
-            if clave in self._entradas:
-                return self._entradas[clave]
+        if not refrescar:
+            with self._cerrojo:
+                if clave in self._entradas:
+                    return self._entradas[clave]
 
         resultado = self._buscador.buscar(consulta)
 

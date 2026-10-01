@@ -141,7 +141,12 @@ class ServicioEvaluacion:
         # comprobar y la aplicacion ejecuta esas busquedas. Si no hay
         # herramienta configurada, esta fase no hace nada y el bloque de hechos
         # queda vacio, lo que llevara al agente a escalar lo que dependa de uno.
-        hechos = self._verificar_hechos(gastos, politica)
+        # Repetir a proposito (usar_cache a falso) repite tambien las
+        # busquedas: si el resultado malo venia de una busqueda guardada,
+        # volver a llamar solo al modelo devolveria lo mismo.
+        hechos = self._verificar_hechos(
+            gastos, politica, refrescar_busquedas=not usar_cache
+        )
 
         # Paso 3: segunda pasada. Con los hechos en la mano, se emiten los
         # veredictos, partiendo el conjunto si el proveedor lo rechaza por
@@ -162,7 +167,8 @@ class ServicioEvaluacion:
         return resultado
 
     def _verificar_hechos(
-        self, gastos: ConjuntoGastos, politica: Politica | None = None
+        self, gastos: ConjuntoGastos, politica: Politica | None = None,
+        refrescar_busquedas: bool = False,
     ) -> str:
         """
         Ejecuta la fase de verificacion y devuelve los hechos comprobados.
@@ -194,8 +200,16 @@ class ServicioEvaluacion:
         # devuelve los resultados en el orden de las consultas, no en el de
         # llegada, de modo que la traza y el bloque de hechos salen siempre
         # igual y una misma evaluacion no cambia de aspecto entre ejecuciones.
+        # El argumento solo se pasa cuando hace falta: un buscador que no
+        # conozca la opcion sigue funcionando en la evaluacion normal.
+        if refrescar_busquedas:
+            def buscar(consulta: str):
+                return self._buscador.buscar(consulta, refrescar=True)
+        else:
+            buscar = self._buscador.buscar
+
         with ThreadPoolExecutor(max_workers=self.HILOS_DE_BUSQUEDA) as grupo:
-            resultados = list(grupo.map(self._buscador.buscar, consultas))
+            resultados = list(grupo.map(buscar, consultas))
 
         self.traza_verificacion.extend(resultados)
         return "\n\n".join(r.a_bloque_para_modelo() for r in resultados)

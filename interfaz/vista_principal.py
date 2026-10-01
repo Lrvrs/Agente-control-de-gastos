@@ -731,8 +731,9 @@ class VistaPrincipal:
                 repetir = st.button(
                     "Volver a evaluar",
                     help=(
-                        "Llama otra vez al modelo sin reutilizar la respuesta "
-                        "guardada. Consume una evaluación de tu cupo."
+                        "Llama otra vez al modelo y repite las búsquedas web, "
+                        "sin reutilizar nada guardado. Consume una evaluación "
+                        "de tu cupo."
                     ),
                     disabled=not self._control_uso.puede_evaluar,
                 )

@@ -370,6 +370,123 @@ class VistaPrincipal:
             f"agente-gastos-esic::{contrasena}".encode("utf-8")
         ).hexdigest()[:20]
 
+    def _pantalla_de_acceso(self) -> str:
+        """
+        Dibuja la pantalla de acceso y devuelve lo que se haya enviado.
+
+        Reproduce la de Chatpdf: fondo azul profundo a toda la pagina, marca,
+        titular grande, una frase, un campo en forma de pastilla con su boton
+        blanco y, debajo, los derechos. Los colores y las proporciones son los
+        de su styles.css, copiados y no enlazados porque son proyectos que se
+        despliegan por separado.
+
+        Va en un formulario para que Intro envie, como en Chatpdf. Antes se
+        comparaba en cada cambio del campo, y eso obligaba a que la clave
+        coincidiera mientras se tecleaba.
+        """
+        st.markdown(
+            """
+            <style>
+            @import url("https://fonts.googleapis.com/css2?family=Montserrat:wght@700;800&family=Source+Sans+3:wght@400;600;700&display=swap");
+
+            /* El lienzo entero pasa al azul profundo, no solo una caja: es lo
+               que hace que parezca una pantalla aparte y no un formulario. */
+            .stApp {
+                background: #0d1650 !important;
+                font-family: "Source Sans 3", system-ui, sans-serif;
+            }
+            .block-container {
+                /* Ancho fijo y no solo maximo: el contenedor de Streamlit se
+                   encoge al contenido, y con solo el maximo el titular se
+                   partia en tres lineas. */
+                width: 26rem !important; max-width: 100% !important;
+                padding: 22vh 0 0 !important;
+            }
+            .acceso-marca {
+                font-family: "Montserrat", system-ui, sans-serif;
+                font-weight: 700; color: rgba(255,255,255,.66);
+                margin: 0 0 1.5rem;
+            }
+            .acceso-titulo {
+                font-family: "Montserrat", system-ui, sans-serif;
+                font-weight: 800; color: #fff;
+                font-size: clamp(2.2rem, 7vw, 3.2rem);
+                line-height: 1.05; letter-spacing: -.02em; margin: 0 0 1rem;
+            }
+            .acceso-texto {
+                color: rgba(255,255,255,.66); margin: 0 0 1.75rem;
+            }
+            .acceso-mensaje { min-height: 1.5rem; margin: 1rem 0 0; color: #fecdd3; }
+            .acceso-derechos {
+                margin: 1rem 0 0; font-size: .75rem; line-height: 1.45;
+                color: rgba(255,255,255,.66);
+            }
+
+            /* Formulario sin marco, con el campo y el boton en una fila. */
+            [data-testid="stForm"] {
+                border: 0 !important; padding: 0 !important;
+                background: transparent !important;
+            }
+
+            /* La pastilla es el contenedor del campo y no el campo: ahi
+               cuelga tambien el ojo de mostrar la clave, que debe quedar
+               dentro de la forma y no como un boton blanco suelto. */
+            [data-testid="stForm"] [data-baseweb="input"] {
+                border-radius: 999px !important;
+                border: 1px solid rgba(255,255,255,.14) !important;
+                background: rgba(255,255,255,.08) !important;
+            }
+            /* El contenedor interior se deja transparente: si tambien
+               llevase fondo, se veria una segunda pastilla dentro de la
+               primera. */
+            [data-testid="stForm"] [data-baseweb="base-input"] {
+                background: transparent !important; border: 0 !important;
+            }
+            [data-testid="stForm"] [data-testid="stTextInput"] input {
+                padding: .7rem 1rem; color: #fff !important;
+                background: transparent !important;
+            }
+            [data-testid="stForm"] [data-testid="stTextInput"] input::placeholder {
+                color: rgba(255,255,255,.66);
+            }
+            [data-testid="stForm"] [data-testid="stTextInput"] button {
+                background: transparent !important; color: rgba(255,255,255,.66) !important;
+            }
+            [data-testid="stForm"] [data-testid="stTextInput"] button svg {
+                fill: rgba(255,255,255,.66) !important;
+            }
+
+            /* Solo el boton de enviar es blanco. */
+            [data-testid="stFormSubmitButton"] button {
+                background: #fff !important; color: #0d1650 !important;
+                border: 0; border-radius: 999px; font-weight: 700;
+                padding: .65rem 1.25rem; white-space: nowrap;
+            }
+            </style>
+            <p class="acceso-marca">Agente de gastos</p>
+            <h1 class="acceso-titulo">Supervisa a tu agente.</h1>
+            <p class="acceso-texto">Escribe la clave que ha dado el profesor
+            para entrar.</p>
+            """,
+            unsafe_allow_html=True,
+        )
+
+        with st.form("acceso", border=False):
+            columna_campo, columna_boton = st.columns([3, 1], vertical_alignment="center")
+            with columna_campo:
+                # type=password para que no quede a la vista si se proyecta la
+                # pantalla en clase mientras alguien la teclea.
+                clave = st.text_input(
+                    "Clave de la clase",
+                    type="password",
+                    placeholder="Clave de la clase",
+                    label_visibility="collapsed",
+                )
+            with columna_boton:
+                st.form_submit_button("Entrar", use_container_width=True)
+
+        return clave
+
     def _verificar_acceso(self) -> bool:
         """
         Comprueba la contrasena de clase, si se ha configurado alguna.
@@ -404,12 +521,7 @@ class VistaPrincipal:
         if st.session_state[self.CLAVE_ACCESO_CONCEDIDO]:
             return True
 
-        st.markdown(
-            '<div class="etiqueta-seccion">Acceso</div>'
-            '<div class="titulo-pagina">Agente de gastos</div>',
-            unsafe_allow_html=True,
-        )
-        introducida = st.text_input("Contraseña de clase", type="password")
+        introducida = self._pantalla_de_acceso()
 
         # Comparacion directa: el valor no protege ningun dato sensible, solo
         # evita que la URL publica sea consumida por quien no esta en el aula.
@@ -424,7 +536,17 @@ class VistaPrincipal:
         # Mensaje solo si se ha escrito algo y no coincide, para no mostrar un
         # error al alumno antes de que haya tenido ocasion de teclear.
         if introducida:
-            st.error("La contraseña no es correcta.")
+            st.markdown(
+                '<p class="acceso-mensaje" role="alert">'
+                'La contraseña no es correcta.</p>',
+                unsafe_allow_html=True,
+            )
+
+        st.markdown(
+            '<p class="acceso-derechos">© 2026 Luis Ríos · Director y profesor '
+            'de ESIC. Todos los derechos reservados.</p>',
+            unsafe_allow_html=True,
+        )
 
         return False
 

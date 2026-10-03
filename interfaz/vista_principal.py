@@ -23,6 +23,7 @@ from infraestructura.cache_evaluaciones import CacheEvaluaciones
 from infraestructura.cola_llm import ColaGlobal, ProveedorConCola
 from infraestructura.configuracion import Configuracion
 from infraestructura.demo_precalculada import RepositorioDemoPrecalculada
+from infraestructura.lector_word import ErrorFicheroPolitica, LectorWord
 from infraestructura.proveedor_llm import ErrorProveedorLLM, FabricaProveedores
 from infraestructura.repositorio_datos import ErrorFicheroGastos, RepositorioDatos
 from interfaz.componentes import Componentes
@@ -49,9 +50,21 @@ class VistaPrincipal:
     # sobrevive pase lo que pase en la pantalla.
     CLAVE_TEXTO_POLITICA = "politica_almacenada"
 
-    # Clave del cuadro de texto. Puede ser descartada por Streamlit sin
-    # consecuencias, porque el valor bueno esta en la anterior.
-    CLAVE_WIDGET_POLITICA = "widget_politica"
+    # La politica llega ahora en un Word. Esas claves guardan lo que se leyo del
+    # fichero, en claves propias y no en el widget, por la misma razon que el
+    # texto: Streamlit borra el estado de lo que no se dibuja.
+    #
+    # El texto visible es lo que una persona ve al abrir el Word; el de arriba
+    # (CLAVE_TEXTO_POLITICA) es lo que se entrega al modelo y puede incluir
+    # texto oculto. Vacio significa que se usa la politica por defecto.
+    CLAVE_TEXTO_POLITICA_VISIBLE = "politica_visible"
+    CLAVE_NOMBRE_POLITICA = "nombre_politica_subida"
+    CLAVE_HUELLA_WORD = "huella_word_subido"
+
+    # Se suma uno para soltar el fichero del cargador: no hay otra forma de
+    # vaciarlo, y si quedara dentro, al volver a la politica por defecto se
+    # volveria a leer solo en el siguiente repintado.
+    CLAVE_SUBIDA_POLITICA = "contador_subida_politica"
     CLAVE_ACCESO_CONCEDIDO = "acceso_concedido"
     CLAVE_GASTOS_SUBIDOS = "gastos_subidos"
     CLAVE_NOMBRE_FICHERO = "nombre_fichero_subido"
@@ -211,6 +224,11 @@ class VistaPrincipal:
             st.session_state[self.CLAVE_TEXTO_POLITICA] = (
                 self._repositorio.cargar_politica().texto
             )
+
+        st.session_state.setdefault(self.CLAVE_TEXTO_POLITICA_VISIBLE, "")
+        st.session_state.setdefault(self.CLAVE_NOMBRE_POLITICA, "")
+        st.session_state.setdefault(self.CLAVE_HUELLA_WORD, "")
+        st.session_state.setdefault(self.CLAVE_SUBIDA_POLITICA, 0)
 
         # Las dos ultimas ejecuciones se conservan para poder comparar y
         # resaltar que veredictos han cambiado.
@@ -680,7 +698,7 @@ class VistaPrincipal:
             politica_actual = self._politica_en_curso()
             Componentes.tarjeta(
                 titulo="Política",
-                dato=f"{politica_actual.numero_de_lineas} líneas",
+                dato=f"{self._politica_visible().numero_de_lineas} líneas",
                 nota=self._describir_estado_politica(politica_actual),
                 color=Paleta.MORADO,
             )
@@ -697,22 +715,39 @@ class VistaPrincipal:
         """Pinta el cuadro de texto de la politica y el boton de evaluar."""
         st.markdown(
             '<div class="etiqueta-seccion" style="margin-top:14px">'
-            'Política de viajes · editable</div>',
+            'Política de viajes · Word</div>',
             unsafe_allow_html=True,
         )
 
-        # El cuadro se inicializa con el valor almacenado y devuelve lo que el
-        # alumno haya escrito, que se guarda de vuelta en el almacen. Ese viaje
-        # de ida y vuelta es lo que hace que el contenido no dependa de la
-        # supervivencia de la clave del widget.
-        texto = st.text_area(
-            label="Política",
-            value=st.session_state[self.CLAVE_TEXTO_POLITICA],
-            key=self.CLAVE_WIDGET_POLITICA,
-            height=260,
-            label_visibility="collapsed",
-        )
-        st.session_state[self.CLAVE_TEXTO_POLITICA] = texto
+        columna_subida, columna_estado = st.columns([2, 1])
+
+        with columna_subida:
+            subido = st.file_uploader(
+                "Sube la política en Word",
+                type=["docx"],
+                key=f"subida_politica_{st.session_state[self.CLAVE_SUBIDA_POLITICA]}",
+                label_visibility="collapsed",
+            )
+
+        with columna_estado:
+            if st.session_state[self.CLAVE_NOMBRE_POLITICA]:
+                if st.button("Volver a la política por defecto", use_container_width=True):
+                    self._descartar_politica_subida()
+                    st.rerun()
+
+        # Se procesa solo cuando cambia el contenido, no en cada reejecutado.
+        # Se compara por huella del contenido y no por nombre: quien edita el
+        # Word y lo vuelve a subir con el mismo nombre espera que se relea.
+        if subido is not None:
+            contenido = subido.getvalue()
+            huella = hashlib.sha256(contenido).hexdigest()
+            if huella != st.session_state[self.CLAVE_HUELLA_WORD]:
+                self._procesar_politica_subida(subido.name, contenido, huella)
+
+        # Lo que se muestra es lo que vería una persona al abrir el Word. No
+        # es el texto que recibe el modelo: ese puede llevar texto oculto.
+        with st.container(height=260, border=True):
+            st.markdown(self._texto_visible_de_la_politica())
 
         columna_boton, columna_aviso = st.columns([1, 3])
 
@@ -1344,6 +1379,51 @@ class VistaPrincipal:
 
         ventana()
 
+    def _procesar_politica_subida(self, nombre: str, contenido: bytes, huella: str) -> None:
+        """Lee el Word y guarda sus dos lecturas en el estado, si es correcto."""
+        try:
+            texto = LectorWord().leer(contenido)
+        except ErrorFicheroPolitica as error:
+            # Error del fichero: es algo que el alumno puede corregir, asi que
+            # se dice y no se guarda nada. Se anota la huella para no repetir
+            # el mensaje en cada repintado.
+            st.session_state[self.CLAVE_HUELLA_WORD] = huella
+            st.error(str(error))
+            return
+
+        if not texto.completo.strip():
+            st.session_state[self.CLAVE_HUELLA_WORD] = huella
+            st.error("El documento de Word está vacío.")
+            return
+
+        st.session_state[self.CLAVE_TEXTO_POLITICA] = texto.completo
+        st.session_state[self.CLAVE_TEXTO_POLITICA_VISIBLE] = texto.visible
+        st.session_state[self.CLAVE_NOMBRE_POLITICA] = nombre
+        st.session_state[self.CLAVE_HUELLA_WORD] = huella
+
+        # Las tarjetas de arriba ya se dibujaron con la politica anterior. Se
+        # repinta para que muestren la nueva; si no, quedan un paso por detras.
+        st.rerun()
+
+    def _descartar_politica_subida(self) -> None:
+        """Vuelve a la politica por defecto y suelta el fichero del cargador."""
+        st.session_state[self.CLAVE_TEXTO_POLITICA] = (
+            self._repositorio.cargar_politica().texto
+        )
+        st.session_state[self.CLAVE_TEXTO_POLITICA_VISIBLE] = ""
+        st.session_state[self.CLAVE_NOMBRE_POLITICA] = ""
+        st.session_state[self.CLAVE_HUELLA_WORD] = ""
+        st.session_state[self.CLAVE_SUBIDA_POLITICA] += 1
+
+    def _texto_visible_de_la_politica(self) -> str:
+        """Devuelve el texto de la politica tal como lo veria una persona."""
+        visible = st.session_state[self.CLAVE_TEXTO_POLITICA_VISIBLE]
+        return visible or self._repositorio.cargar_politica().texto
+
+    def _politica_visible(self) -> Politica:
+        """La politica construida con lo visible, para lo que se muestra."""
+        return Politica(texto=self._texto_visible_de_la_politica())
+
     def _politica_en_curso(self) -> Politica:
         """
         Construye la entidad Politica con el texto que hay en pantalla.
@@ -1374,6 +1454,10 @@ class VistaPrincipal:
 
     def _describir_estado_politica(self, politica_actual: Politica) -> str:
         """Indica si el alumno ha modificado la politica original."""
+        nombre = st.session_state[self.CLAVE_NOMBRE_POLITICA]
+        if nombre:
+            return f"Cargada desde Word: {nombre}."
+
         # Se compara con la del repositorio por huella, de modo que un cambio de
         # sangrado o una linea en blanco no cuenten como modificacion real.
         original = self._repositorio.cargar_politica()

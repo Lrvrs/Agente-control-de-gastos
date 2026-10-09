@@ -23,7 +23,7 @@ from infraestructura.cache_evaluaciones import CacheEvaluaciones
 from infraestructura.cola_llm import ColaGlobal, ProveedorConCola
 from infraestructura.configuracion import Configuracion
 from infraestructura.demo_precalculada import RepositorioDemoPrecalculada
-from infraestructura.lector_word import ErrorFicheroPolitica, LectorWord
+from infraestructura.lector_pdf import ErrorFicheroPolitica, LectorPdf
 from infraestructura.proveedor_llm import ErrorProveedorLLM, FabricaProveedores
 from infraestructura.repositorio_datos import ErrorFicheroGastos, RepositorioDatos
 from interfaz.componentes import Componentes
@@ -50,16 +50,17 @@ class VistaPrincipal:
     # sobrevive pase lo que pase en la pantalla.
     CLAVE_TEXTO_POLITICA = "politica_almacenada"
 
-    # La politica llega ahora en un Word. Esas claves guardan lo que se leyo del
+    # La politica llega en un PDF. Esas claves guardan lo que se leyo del
     # fichero, en claves propias y no en el widget, por la misma razon que el
-    # texto: Streamlit borra el estado de lo que no se dibuja.
-    #
-    # El texto visible es lo que una persona ve al abrir el Word; el de arriba
-    # (CLAVE_TEXTO_POLITICA) es lo que se entrega al modelo y puede incluir
-    # texto oculto. Vacio significa que se usa la politica por defecto.
-    CLAVE_TEXTO_POLITICA_VISIBLE = "politica_visible"
+    # texto: Streamlit borra el estado de lo que no se dibuja. Vacio significa
+    # que se usa la politica por defecto.
     CLAVE_NOMBRE_POLITICA = "nombre_politica_subida"
-    CLAVE_HUELLA_WORD = "huella_word_subido"
+
+    # Lo que se ensena en lugar de la politica cuando hay un PDF cargado. No se
+    # muestra el texto extraido: lo que ve una persona es la pagina dibujada, y
+    # sin un renderizador no se puede reproducir a partir del texto.
+    CLAVE_AVISO_POLITICA = "aviso_politica_subida"
+    CLAVE_HUELLA_POLITICA_SUBIDA = "huella_politica_subida"
 
     # Se suma uno para soltar el fichero del cargador: no hay otra forma de
     # vaciarlo, y si quedara dentro, al volver a la politica por defecto se
@@ -225,9 +226,9 @@ class VistaPrincipal:
                 self._repositorio.cargar_politica().texto
             )
 
-        st.session_state.setdefault(self.CLAVE_TEXTO_POLITICA_VISIBLE, "")
         st.session_state.setdefault(self.CLAVE_NOMBRE_POLITICA, "")
-        st.session_state.setdefault(self.CLAVE_HUELLA_WORD, "")
+        st.session_state.setdefault(self.CLAVE_AVISO_POLITICA, "")
+        st.session_state.setdefault(self.CLAVE_HUELLA_POLITICA_SUBIDA, "")
         st.session_state.setdefault(self.CLAVE_SUBIDA_POLITICA, 0)
 
         # Las dos ultimas ejecuciones se conservan para poder comparar y
@@ -698,7 +699,7 @@ class VistaPrincipal:
             politica_actual = self._politica_en_curso()
             Componentes.tarjeta(
                 titulo="Política",
-                dato=f"{self._politica_visible().numero_de_lineas} líneas",
+                dato=f"{politica_actual.numero_de_lineas} líneas",
                 nota=self._describir_estado_politica(politica_actual),
                 color=Paleta.MORADO,
             )
@@ -715,7 +716,7 @@ class VistaPrincipal:
         """Pinta el cuadro de texto de la politica y el boton de evaluar."""
         st.markdown(
             '<div class="etiqueta-seccion" style="margin-top:14px">'
-            'Política de viajes · Word</div>',
+            'Política de viajes · PDF</div>',
             unsafe_allow_html=True,
         )
 
@@ -723,8 +724,8 @@ class VistaPrincipal:
 
         with columna_subida:
             subido = st.file_uploader(
-                "Sube la política en Word",
-                type=["docx"],
+                "Sube la política en PDF",
+                type=["pdf"],
                 key=f"subida_politica_{st.session_state[self.CLAVE_SUBIDA_POLITICA]}",
                 label_visibility="collapsed",
             )
@@ -736,18 +737,23 @@ class VistaPrincipal:
                     st.rerun()
 
         # Se procesa solo cuando cambia el contenido, no en cada reejecutado.
-        # Se compara por huella del contenido y no por nombre: quien edita el
-        # Word y lo vuelve a subir con el mismo nombre espera que se relea.
+        # Se compara por huella del contenido y no por nombre: quien regenera el
+        # PDF y lo vuelve a subir con el mismo nombre espera que se relea.
         if subido is not None:
             contenido = subido.getvalue()
             huella = hashlib.sha256(contenido).hexdigest()
-            if huella != st.session_state[self.CLAVE_HUELLA_WORD]:
+            if huella != st.session_state[self.CLAVE_HUELLA_POLITICA_SUBIDA]:
                 self._procesar_politica_subida(subido.name, contenido, huella)
 
-        # Lo que se muestra es lo que vería una persona al abrir el Word. No
-        # es el texto que recibe el modelo: ese puede llevar texto oculto.
+        # Con un PDF cargado se muestra un aviso y no el texto: el que recibe
+        # el modelo es el que extrae la biblioteca, y puede no coincidir con lo
+        # que ve una persona al abrirlo. Sin PDF, la politica por defecto.
         with st.container(height=260, border=True):
-            st.markdown(self._texto_visible_de_la_politica())
+            aviso = st.session_state[self.CLAVE_AVISO_POLITICA]
+            if aviso:
+                st.info(aviso)
+            else:
+                st.markdown(self._repositorio.cargar_politica().texto)
 
         columna_boton, columna_aviso = st.columns([1, 3])
 
@@ -1380,26 +1386,24 @@ class VistaPrincipal:
         ventana()
 
     def _procesar_politica_subida(self, nombre: str, contenido: bytes, huella: str) -> None:
-        """Lee el Word y guarda sus dos lecturas en el estado, si es correcto."""
+        """Lee el PDF y guarda su texto en el estado, si es correcto."""
         try:
-            texto = LectorWord().leer(contenido)
+            leido = LectorPdf().leer(contenido)
         except ErrorFicheroPolitica as error:
             # Error del fichero: es algo que el alumno puede corregir, asi que
             # se dice y no se guarda nada. Se anota la huella para no repetir
             # el mensaje en cada repintado.
-            st.session_state[self.CLAVE_HUELLA_WORD] = huella
+            st.session_state[self.CLAVE_HUELLA_POLITICA_SUBIDA] = huella
             st.error(str(error))
             return
 
-        if not texto.completo.strip():
-            st.session_state[self.CLAVE_HUELLA_WORD] = huella
-            st.error("El documento de Word está vacío.")
-            return
-
-        st.session_state[self.CLAVE_TEXTO_POLITICA] = texto.completo
-        st.session_state[self.CLAVE_TEXTO_POLITICA_VISIBLE] = texto.visible
+        st.session_state[self.CLAVE_TEXTO_POLITICA] = leido.texto
+        st.session_state[self.CLAVE_AVISO_POLITICA] = (
+            f"PDF cargado: {leido.paginas} página(s). Se muestra al abrirlo "
+            "en un visor de PDF."
+        )
         st.session_state[self.CLAVE_NOMBRE_POLITICA] = nombre
-        st.session_state[self.CLAVE_HUELLA_WORD] = huella
+        st.session_state[self.CLAVE_HUELLA_POLITICA_SUBIDA] = huella
 
         # Las tarjetas de arriba ya se dibujaron con la politica anterior. Se
         # repinta para que muestren la nueva; si no, quedan un paso por detras.
@@ -1410,19 +1414,10 @@ class VistaPrincipal:
         st.session_state[self.CLAVE_TEXTO_POLITICA] = (
             self._repositorio.cargar_politica().texto
         )
-        st.session_state[self.CLAVE_TEXTO_POLITICA_VISIBLE] = ""
+        st.session_state[self.CLAVE_AVISO_POLITICA] = ""
         st.session_state[self.CLAVE_NOMBRE_POLITICA] = ""
-        st.session_state[self.CLAVE_HUELLA_WORD] = ""
+        st.session_state[self.CLAVE_HUELLA_POLITICA_SUBIDA] = ""
         st.session_state[self.CLAVE_SUBIDA_POLITICA] += 1
-
-    def _texto_visible_de_la_politica(self) -> str:
-        """Devuelve el texto de la politica tal como lo veria una persona."""
-        visible = st.session_state[self.CLAVE_TEXTO_POLITICA_VISIBLE]
-        return visible or self._repositorio.cargar_politica().texto
-
-    def _politica_visible(self) -> Politica:
-        """La politica construida con lo visible, para lo que se muestra."""
-        return Politica(texto=self._texto_visible_de_la_politica())
 
     def _politica_en_curso(self) -> Politica:
         """
@@ -1456,7 +1451,7 @@ class VistaPrincipal:
         """Indica si el alumno ha modificado la politica original."""
         nombre = st.session_state[self.CLAVE_NOMBRE_POLITICA]
         if nombre:
-            return f"Cargada desde Word: {nombre}."
+            return f"Cargada desde PDF: {nombre}."
 
         # Se compara con la del repositorio por huella, de modo que un cambio de
         # sangrado o una linea en blanco no cuenten como modificacion real.

@@ -27,3 +27,8 @@ openpyxl==3.1.5
 # Cliente HTTP para la herramienta de verificacion de hechos. Ya venia como
 # dependencia de openai, pero se declara de forma explicita porque ahora el
 # proyecto lo usa por su cuenta y no debe depender de que otro lo arrastre.
+
+# Lectura de la politica que sube el alumno en PDF. Es Python puro y no
+# arrastra dependencias: es el motivo de elegirla, porque pandas y Pillow ya
+# rompieron el despliegue por exigir compilacion.
+pypdf==6.20.0

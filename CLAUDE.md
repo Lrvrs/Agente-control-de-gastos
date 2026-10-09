@@ -20,8 +20,8 @@ enseña, aunque funcione.
 - Cuatro capas, con las dependencias siempre hacia adentro:
   `dominio` (no importa nada externo) ← `aplicacion` ← `infraestructura` /
   `interfaz`. El dominio no conoce ni Streamlit ni el cliente del modelo.
-- Nada de dependencias nuevas sin motivo fuerte. Ahora son cuatro:
-  streamlit, openai, httpx y openpyxl. Pandas se retiró porque no se usaba y
+- Nada de dependencias nuevas sin motivo fuerte. Ahora son cinco:
+  streamlit, openai, httpx, openpyxl y pypdf. Pandas se retiró porque no se usaba y
   rompía el despliegue.
 
 ## Commits

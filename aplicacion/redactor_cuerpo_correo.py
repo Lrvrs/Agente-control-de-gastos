@@ -130,6 +130,7 @@ sobre una decisión con consecuencias económicas.
                 veredicto.evento,
                 veredicto.evento_desde,
                 veredicto.evento_hasta,
+                str(veredicto.importe_reembolsable),
                 destinatario,
             ]
         )
@@ -160,6 +161,15 @@ sobre una decisión con consecuencias económicas.
             f"Cláusula aplicada: {veredicto.clausula}",
             f"Motivo de la resolución: {veredicto.motivo}",
         ]
+
+        # El importe a reembolsar solo se incluye cuando el agente lo ha fijado
+        # distinto del declarado. Sin este dato el modelo no podria mencionarlo,
+        # porque tiene prohibido aportar cifras que no figuren aqui.
+        ajustado = veredicto.importe_ajustado(gasto.importe)
+        if ajustado is not None:
+            lineas.append(
+                f"Importe a reembolsar: {formatear_importe(ajustado, gasto.moneda)}"
+            )
 
         # El periodo del evento solo se incluye cuando consta verificado. Es el
         # dato que sostiene la discrepancia y debe llegar completo.

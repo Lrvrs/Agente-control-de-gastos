@@ -1183,7 +1183,7 @@ class VistaPrincipal:
         with columnas[1]:
             Componentes.celda_concepto(gasto)
         with columnas[2]:
-            Componentes.celda_importe(gasto)
+            Componentes.celda_importe(gasto, veredicto)
         with columnas[3]:
             Componentes.celda_decision(decision, discrepa=False)
 

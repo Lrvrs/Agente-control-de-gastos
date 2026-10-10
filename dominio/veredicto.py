@@ -110,6 +110,29 @@ class Veredicto:
     evento_desde: str = ""
     evento_hasta: str = ""
 
+    # Importe que el agente resuelve reembolsar cuando no coincide con el
+    # declarado: un reembolso parcial o un ajuste que fija la politica. Es un
+    # dato que declara el modelo y que la aplicacion se limita a mostrar; no
+    # hay en el codigo ninguna regla que lo calcule. None significa que se
+    # reembolsa lo declarado.
+    importe_reembolsable: float | None = None
+
+    def importe_ajustado(self, importe_declarado: float) -> float | None:
+        """
+        Devuelve el importe a reembolsar si difiere del declarado, o None.
+
+        Solo tiene sentido cuando el gasto se paga, en todo o en parte: un
+        importe junto a una denegacion o un escalado no se pagaria, y mostrarlo
+        induciria a error.
+        """
+        if self.importe_reembolsable is None:
+            return None
+        if self.tipo not in (TipoVeredicto.APROBADO, TipoVeredicto.PARCIAL):
+            return None
+        if abs(self.importe_reembolsable - importe_declarado) < 0.005:
+            return None
+        return self.importe_reembolsable
+
     @property
     def tiene_periodo_de_evento(self) -> bool:
         """Indica si consta el evento invocado y sus fechas de celebracion."""

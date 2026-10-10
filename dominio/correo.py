@@ -368,6 +368,16 @@ class RedactorCorreo:
         if not clausula or clausula.lower() in ("sin indicar", "-", "none"):
             clausula = "no identificada"
 
+        # Si el agente resolvio reembolsar otro importe, la ficha lo dice en una
+        # linea aparte. Se conserva el declarado porque es lo que se presento, y
+        # la discrepancia entre los dos es justamente lo que hay que auditar.
+        ajustado = veredicto.importe_ajustado(gasto.importe)
+        linea_reembolso = (
+            f"A reembolsar:  {self._formatear_importe(ajustado, gasto.moneda)}\n"
+            if ajustado is not None
+            else ""
+        )
+
         ficha = (
             f"Referencia:    {gasto.identificador}\n"
             f"Empleado:      {gasto.empleado}\n"
@@ -376,6 +386,7 @@ class RedactorCorreo:
             f"Categoría:     {gasto.categoria}\n"
             f"Ciudad:        {gasto.ciudad}\n"
             f"Importe:       {self._formatear_importe(gasto.importe, gasto.moneda)}\n"
+            f"{linea_reembolso}"
             f"Justificante:  {justificante}\n"
             f"Resolución:    {veredicto.tipo.value}\n"
             f"Cláusula:      {clausula}"

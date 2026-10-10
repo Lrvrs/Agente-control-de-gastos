@@ -210,11 +210,30 @@ class Componentes:
         )
 
     @staticmethod
-    def celda_importe(gasto) -> None:
-        """Pinta el importe alineado en tipografia monoespaciada."""
+    def celda_importe(gasto, veredicto=None) -> None:
+        """
+        Pinta el importe alineado en tipografia monoespaciada.
+
+        Si el agente resolvio reembolsar otro importe, ese es el que se destaca
+        y el declarado queda debajo en pequeno: la persona que supervisa debe
+        ver lo que se va a pagar, y tambien que no coincide con lo presentado.
+        """
+        ajustado = (
+            veredicto.importe_ajustado(gasto.importe) if veredicto is not None else None
+        )
+
+        if ajustado is None:
+            st.markdown(
+                f'<div class="mono" style="padding-top:6px">'
+                f'{gasto.importe:.2f} {escape(gasto.moneda)}</div>',
+                unsafe_allow_html=True,
+            )
+            return
+
         st.markdown(
-            f'<div class="mono" style="padding-top:6px">'
-            f'{gasto.importe:.2f} {escape(gasto.moneda)}</div>',
+            f'<div class="mono" style="padding-top:6px"><b>'
+            f'{ajustado:.2f} {escape(gasto.moneda)}</b><br>'
+            f'<span class="celda-meta">declarado {gasto.importe:.2f}</span></div>',
             unsafe_allow_html=True,
         )
 

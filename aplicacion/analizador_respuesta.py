@@ -1,6 +1,8 @@
 """Analisis y validacion de la respuesta JSON devuelta por el modelo."""
 
 import json
+import math
+import re
 from typing import Any, Dict, List
 
 from dominio.gasto import ConjuntoGastos
@@ -141,7 +143,34 @@ class AnalizadorRespuesta:
             evento=evento,
             evento_desde=desde,
             evento_hasta=hasta,
+            importe_reembolsable=self._leer_importe(
+                elemento.get("importe_reembolsable")
+            ),
         )
+
+    @staticmethod
+    def _leer_importe(bruto: Any) -> float | None:
+        """
+        Convierte el importe que devuelve el modelo, o None si no es utilizable.
+
+        Se tolera un numero, o un texto con moneda o con coma decimal, porque el
+        modelo no siempre respeta el formato pedido. Lo que no es un numero
+        finito y positivo se descarta en silencio: es un campo opcional, y un
+        valor roto debe significar "se reembolsa lo declarado", no un error.
+        """
+        if bruto is None or isinstance(bruto, bool):
+            return None
+
+        if isinstance(bruto, (int, float)):
+            valor = float(bruto)
+        else:
+            texto = str(bruto).strip().replace(",", ".")
+            coincidencia = re.search(r"\d+(?:\.\d+)?", texto)
+            if not coincidencia:
+                return None
+            valor = float(coincidencia.group(0))
+
+        return valor if math.isfinite(valor) and valor > 0 else None
 
     def _completar_ausentes(
         self, resultado: ResultadoEvaluacion, gastos: ConjuntoGastos

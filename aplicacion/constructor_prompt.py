@@ -48,6 +48,11 @@ quien lea tu resolución. Cita en el motivo el dato concreto en que te apoyas.
 disponible no permite confirmarlo, emite REVISION y di exactamente qué no \
 has podido comprobar. No supongas fechas, distancias ni la existencia de \
 ninguna empresa o evento.
+9. Para cada gasto que resuelvas APROBADO o PARCIAL, incluye el campo \
+importe_reembolsable con el importe que se reembolsa, como número sin moneda \
+ni separador de miles y en la moneda del apunte. Será el declarado salvo que \
+la política establezca otro importe o que el reembolso sea parcial. En un \
+gasto DENEGADO o REVISION, omite el campo.
 
 El campo motivo se mostrará tal cual al empleado, en la primera línea del \
 correo que recibirá. Escríbelo como se lo explicarías a un compañero: una o \
